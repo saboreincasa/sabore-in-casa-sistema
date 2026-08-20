@@ -10,8 +10,39 @@ function statusDe(atual, minimo) {
   return { tone: "green", label: "Saudável" };
 }
 
+function TabelaEstoque({ titulo, itens, idField, onAjustar }) {
+  return html`
+    <div class="card">
+      <h3 style="margin:0 0 16px;font-size:16px;">${titulo}</h3>
+      ${itens.length === 0 ? html`<${EmptyState}>Nenhum produto cadastrado.<//>` : html`
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Produto</th><th>Estoque atual</th><th>Mínimo</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              ${itens.map((e) => {
+                const s = statusDe(Number(e.estoque_atual), Number(e.estoque_minimo));
+                return html`
+                  <tr key=${e[idField]}>
+                    <td><div class="cell-product"><${ImgThumb} src=${e.imagem_url} alt=${e.nome} /><div class="cell-title">${e.nome}</div></div></td>
+                    <td class="bold">${e.estoque_atual}</td>
+                    <td class="cell-sub">${e.estoque_minimo}</td>
+                    <td><${Badge} tone=${s.tone}>${s.label}<//></td>
+                    <td class="actions-cell">
+                      <button class="btn btn-secondary btn-sm" onClick=${() => onAjustar(e)}>Ajustar</button>
+                    </td>
+                  </tr>
+                `;
+              })}
+            </tbody>
+          </table>
+        </div>
+      `}
+    </div>
+  `;
+}
+
 export function EstoquePage() {
-  const { estoque, toast, refreshEstoque } = useAppData();
+  const { estoque, estoqueLanches, toast, refreshEstoque, refreshEstoqueLanches } = useAppData();
   const [modalOpen, setModalOpen] = useState(false);
   const [produtoAjuste, setProdutoAjuste] = useState(null);
   const [historico, setHistorico] = useState([]);
@@ -22,7 +53,7 @@ export function EstoquePage() {
     try {
       const { data, error } = await supabase
         .from("ajustes_estoque")
-        .select("*, bebida:bebidas(nome)")
+        .select("*, bebida:bebidas(nome), lanche:lanches(nome)")
         .order("criado_em", { ascending: false })
         .limit(20);
       if (error) throw error;
@@ -38,6 +69,7 @@ export function EstoquePage() {
   function handleSaved() {
     setModalOpen(false);
     refreshEstoque();
+    refreshEstoqueLanches();
     loadHistorico();
   }
 
@@ -45,40 +77,16 @@ export function EstoquePage() {
     <div class="stack-6">
       <div><h1 class="h2" style="font-size:26px;">Estoque</h1><p class="muted-text" style="margin:4px 0 0;">Níveis atuais e ajustes manuais (perdas, quebras, contagens).</p></div>
 
-      <div class="card">
-        <h3 style="margin:0 0 16px;font-size:16px;">Situação atual</h3>
-        ${estoque.length === 0 ? html`<${EmptyState}>Nenhum produto cadastrado.<//>` : html`
-          <div class="table-wrap">
-            <table class="data-table">
-              <thead><tr><th>Produto</th><th>Estoque atual</th><th>Mínimo</th><th>Status</th><th></th></tr></thead>
-              <tbody>
-                ${estoque.map((e) => {
-                  const s = statusDe(Number(e.estoque_atual), Number(e.estoque_minimo));
-                  return html`
-                    <tr key=${e.bebida_id}>
-                      <td><div class="cell-product"><${ImgThumb} src=${e.imagem_url} alt=${e.nome} /><div class="cell-title">${e.nome}</div></div></td>
-                      <td class="bold">${e.estoque_atual}</td>
-                      <td class="cell-sub">${e.estoque_minimo}</td>
-                      <td><${Badge} tone=${s.tone}>${s.label}<//></td>
-                      <td class="actions-cell">
-                        <button class="btn btn-secondary btn-sm" onClick=${() => { setProdutoAjuste(e); setModalOpen(true); }}>Ajustar</button>
-                      </td>
-                    </tr>
-                  `;
-                })}
-              </tbody>
-            </table>
-          </div>
-        `}
-        <p class="hint" style="margin-top:14px;">Pizzas são produzidas sob demanda e não entram no controle de estoque.</p>
-      </div>
+      <${TabelaEstoque} titulo="Bebidas" itens=${estoque} idField="bebida_id" onAjustar=${(e) => { setProdutoAjuste({ ...e, tipoItem: "bebida" }); setModalOpen(true); }} />
+      <${TabelaEstoque} titulo="Lanches" itens=${estoqueLanches} idField="lanche_id" onAjustar=${(e) => { setProdutoAjuste({ ...e, tipoItem: "lanche" }); setModalOpen(true); }} />
+      <p class="hint">Pizzas são produzidas sob demanda e não entram no controle de estoque. Vendas de combo no delivery baixam automaticamente as bebidas/lanches inclusos.</p>
 
       <div class="card">
         <h3 style="margin:0 0 16px;font-size:16px;">Últimos ajustes manuais</h3>
         ${loadingHist ? html`<${LoadingState} />` : historico.length === 0 ? html`<${EmptyState}>Nenhum ajuste registrado.<//>` : html`
           ${historico.map((h) => html`
             <div key=${h.id} class="ledger-row">
-              <div><div class="bold" style="font-size:12.5px;">${h.bebida?.nome}</div><div class="muted-text small">${h.motivo || "Sem motivo informado"} · ${dataHora(h.criado_em)}</div></div>
+              <div><div class="bold" style="font-size:12.5px;">${h.bebida?.nome || h.lanche?.nome}</div><div class="muted-text small">${h.motivo || "Sem motivo informado"} · ${dataHora(h.criado_em)}</div></div>
               <span class=${h.tipo === "entrada" ? "text-green bold" : "text-red bold"}>${h.tipo === "entrada" ? "+" : "-"}${h.quantidade}</span>
             </div>
           `)}
@@ -102,7 +110,10 @@ function AjusteModal({ produto, onClose, onSaved }) {
     if (!quantidade || Number(quantidade) <= 0) { toast("Informe uma quantidade válida.", "error"); return; }
     setSaving(true);
     try {
-      await insertRow("ajustes_estoque", { bebida_id: produto.bebida_id, tipo, quantidade: Number(quantidade), motivo: motivo || null });
+      const payload = { tipo, quantidade: Number(quantidade), motivo: motivo || null };
+      if (produto.tipoItem === "lanche") payload.lanche_id = produto.lanche_id;
+      else payload.bebida_id = produto.bebida_id;
+      await insertRow("ajustes_estoque", payload);
       toast("Ajuste registrado.", "success");
       onSaved();
     } catch (e) {

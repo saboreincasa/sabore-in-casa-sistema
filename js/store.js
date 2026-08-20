@@ -40,11 +40,14 @@ export function useAppData() {
 export function AppDataProvider({ session, profile, children }) {
   const [bebidas, setBebidas] = useState([]);
   const [sabores, setSabores] = useState([]);
+  const [lanches, setLanches] = useState([]);
+  const [combos, setCombos] = useState([]);
   const [canais, setCanais] = useState([]);
   const [config, setConfig] = useState({ margem_minima: 35, margem_recomendada: 50 });
   const [clientes, setClientes] = useState([]);
   const [fornecedores, setFornecedores] = useState([]);
   const [estoque, setEstoque] = useState([]);
+  const [estoqueLanches, setEstoqueLanches] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [toasts, setToasts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -60,6 +63,12 @@ export function AppDataProvider({ session, profile, children }) {
   }, []);
   const refreshSabores = useCallback(async () => {
     setSabores(await fetchAll("sabores_pizza", { order: "nome", ascending: true }));
+  }, []);
+  const refreshLanches = useCallback(async () => {
+    setLanches(await fetchAll("lanches", { order: "nome", ascending: true }));
+  }, []);
+  const refreshCombos = useCallback(async () => {
+    setCombos(await fetchAll("combos", { order: "nome", ascending: true }));
   }, []);
   const refreshCanais = useCallback(async () => {
     setCanais(await fetchAll("canais_venda", { order: "nome", ascending: true }));
@@ -77,6 +86,9 @@ export function AppDataProvider({ session, profile, children }) {
   const refreshEstoque = useCallback(async () => {
     setEstoque(await fetchAll("v_estoque_atual", { order: "nome", ascending: true }));
   }, []);
+  const refreshEstoqueLanches = useCallback(async () => {
+    setEstoqueLanches(await fetchAll("v_estoque_lanches", { order: "nome", ascending: true }));
+  }, []);
   const refreshProfiles = useCallback(async () => {
     setProfiles(await fetchAll("profiles", { order: "criado_em", ascending: true }));
   }, []);
@@ -85,8 +97,8 @@ export function AppDataProvider({ session, profile, children }) {
     setLoading(true);
     try {
       await Promise.all([
-        refreshBebidas(), refreshSabores(), refreshCanais(), refreshConfig(),
-        refreshClientes(), refreshFornecedores(), refreshEstoque(), refreshProfiles(),
+        refreshBebidas(), refreshSabores(), refreshLanches(), refreshCombos(), refreshCanais(), refreshConfig(),
+        refreshClientes(), refreshFornecedores(), refreshEstoque(), refreshEstoqueLanches(), refreshProfiles(),
       ]);
     } catch (e) {
       console.error(e);
@@ -94,15 +106,15 @@ export function AppDataProvider({ session, profile, children }) {
     } finally {
       setLoading(false);
     }
-  }, [refreshBebidas, refreshSabores, refreshCanais, refreshConfig, refreshClientes, refreshFornecedores, refreshEstoque, refreshProfiles, toast]);
+  }, [refreshBebidas, refreshSabores, refreshLanches, refreshCombos, refreshCanais, refreshConfig, refreshClientes, refreshFornecedores, refreshEstoque, refreshEstoqueLanches, refreshProfiles, toast]);
 
   useEffect(() => { refreshAll(); }, [refreshAll]);
 
   const value = {
     session, profile, isAdmin: profile?.role === "admin",
-    bebidas, sabores, canais, config, clientes, fornecedores, estoque, profiles, loading,
-    refreshBebidas, refreshSabores, refreshCanais, refreshConfig, refreshClientes,
-    refreshFornecedores, refreshEstoque, refreshProfiles, refreshAll,
+    bebidas, sabores, lanches, combos, canais, config, clientes, fornecedores, estoque, estoqueLanches, profiles, loading,
+    refreshBebidas, refreshSabores, refreshLanches, refreshCombos, refreshCanais, refreshConfig, refreshClientes,
+    refreshFornecedores, refreshEstoque, refreshEstoqueLanches, refreshProfiles, refreshAll,
     toast,
     signOut: () => supabase.auth.signOut(),
   };

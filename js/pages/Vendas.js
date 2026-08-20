@@ -4,8 +4,22 @@ import { useAppData, insertRow, updateRow, deleteRow } from "../store.js";
 import { Modal, useConfirm, LoadingState, EmptyState, ImgThumb } from "../components/ui.js";
 import { brl, dataHora, precoSugerido } from "../format.js";
 
+function nomeDaVenda(v) {
+  if (v.tipo === "pizza") return `${v.sabor?.nome || "?"} (${v.tamanho})`;
+  if (v.tipo === "lanche") return v.lanche?.nome || "?";
+  if (v.tipo === "combo") return v.combo?.nome || "?";
+  return v.bebida?.nome || "?";
+}
+
+function imgDaVenda(v) {
+  if (v.tipo === "pizza") return v.sabor?.imagem_url;
+  if (v.tipo === "lanche") return v.lanche?.imagem_url;
+  if (v.tipo === "combo") return v.combo?.imagem_url;
+  return v.bebida?.imagem_url;
+}
+
 export function VendasPage() {
-  const { toast, isAdmin, refreshEstoque } = useAppData();
+  const { toast, isAdmin, refreshEstoque, refreshEstoqueLanches } = useAppData();
   const [vendas, setVendas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -17,7 +31,7 @@ export function VendasPage() {
     try {
       const { data, error } = await supabase
         .from("vendas")
-        .select("*, bebida:bebidas(nome, imagem_url), sabor:sabores_pizza(nome, imagem_url), canal:canais_venda(nome), cliente:clientes(nome)")
+        .select("*, bebida:bebidas(nome, imagem_url), sabor:sabores_pizza(nome, imagem_url), lanche:lanches(nome, imagem_url), combo:combos(nome, imagem_url), canal:canais_venda(nome), cliente:clientes(nome)")
         .order("criado_em", { ascending: false })
         .limit(200);
       if (error) throw error;
@@ -30,13 +44,13 @@ export function VendasPage() {
   }
   useEffect(() => { load(); }, []);
 
-  function handleSaved() { setModalOpen(false); load(); refreshEstoque(); }
+  function handleSaved() { setModalOpen(false); load(); refreshEstoque(); refreshEstoqueLanches(); }
   function handleDelete(v) {
     confirm("Excluir esta venda? O estoque e o caixa serão ajustados automaticamente.", async () => {
       try {
         await deleteRow("vendas", v.id);
         toast("Venda excluída.", "success");
-        load(); refreshEstoque();
+        load(); refreshEstoque(); refreshEstoqueLanches();
       } catch (e) {
         toast(`Erro ao excluir: ${e.message}`, "error");
       }
@@ -58,8 +72,8 @@ export function VendasPage() {
               <thead><tr><th>Produto</th><th>Canal</th><th>Cliente</th><th>Qtd.</th><th>Preço</th><th>Total</th><th>Data</th><th></th></tr></thead>
               <tbody>
                 ${vendas.map((v) => {
-                  const nome = v.tipo === "pizza" ? `${v.sabor?.nome} (${v.tamanho})` : v.bebida?.nome;
-                  const img = v.tipo === "pizza" ? v.sabor?.imagem_url : v.bebida?.imagem_url;
+                  const nome = nomeDaVenda(v);
+                  const img = imgDaVenda(v);
                   return html`
                     <tr key=${v.id}>
                       <td><div class="cell-product"><${ImgThumb} src=${img} alt=${nome} /><div class="cell-title">${nome}</div></div></td>
@@ -89,11 +103,13 @@ export function VendasPage() {
 }
 
 function VendaModal({ editing, onClose, onSaved }) {
-  const { bebidas, sabores, canais, clientes, config, estoque, toast } = useAppData();
+  const { bebidas, sabores, lanches, combos, canais, clientes, config, estoque, estoqueLanches, toast } = useAppData();
   const [tipo, setTipo] = useState(editing?.tipo || "bebida");
   const [bebidaId, setBebidaId] = useState(editing?.bebida_id || bebidas[0]?.id || "");
   const [saborId, setSaborId] = useState(editing?.sabor_id || sabores[0]?.id || "");
   const [tamanho, setTamanho] = useState(editing?.tamanho || "M");
+  const [lancheId, setLancheId] = useState(editing?.lanche_id || lanches[0]?.id || "");
+  const [comboId, setComboId] = useState(editing?.combo_id || combos[0]?.id || "");
   const [canalId, setCanalId] = useState(editing?.canal_id || canais[0]?.id || "");
   const [quantidade, setQuantidade] = useState(editing?.quantidade ?? 1);
   const [clienteId, setClienteId] = useState(editing?.cliente_id || "");
@@ -104,25 +120,43 @@ function VendaModal({ editing, onClose, onSaved }) {
   const canal = canais.find((c) => c.id === canalId);
   const bebida = bebidas.find((b) => b.id === bebidaId);
   const sabor = sabores.find((s) => s.id === saborId);
-  const custoUnitario = tipo === "bebida" ? Number(bebida?.custo || 0) : Number(sabor?.[`custo_${tamanho.toLowerCase()}`] || 0);
-  const precoSugeridoCalc = canal ? precoSugerido(custoUnitario, config.margem_recomendada, canal.comissao_pct, canal.taxa_pagamento_pct) : null;
+  const lanche = lanches.find((l) => l.id === lancheId);
+  const combo = combos.find((c) => c.id === comboId);
+
+  const custoUnitario = tipo === "bebida" ? Number(bebida?.custo || 0)
+    : tipo === "pizza" ? Number(sabor?.[`custo_${tamanho.toLowerCase()}`] || 0)
+    : tipo === "lanche" ? Number(lanche?.custo || 0)
+    : 0; // combo: custo nao rastreado nas vendas manuais (so o pedido do delivery calcula isso)
+
+  const precoSugeridoCalc = tipo === "combo" ? Number(combo?.preco || 0)
+    : canal ? precoSugerido(custoUnitario, config.margem_recomendada, canal.comissao_pct, canal.taxa_pagamento_pct)
+    : null;
   const precoFinal = precoManual !== "" ? Number(precoManual) : precoSugeridoCalc;
 
   const estoqueDisponivel = useMemo(() => {
-    if (tipo !== "bebida") return null;
-    const linha = estoque.find((e) => e.bebida_id === bebidaId);
-    const jaContado = editing && editing.tipo === "bebida" && editing.bebida_id === bebidaId ? Number(editing.quantidade) : 0;
-    return linha ? Number(linha.estoque_atual) + jaContado : 0;
-  }, [tipo, bebidaId, estoque, editing]);
+    if (tipo === "bebida") {
+      const linha = estoque.find((e) => e.bebida_id === bebidaId);
+      const jaContado = editing && editing.tipo === "bebida" && editing.bebida_id === bebidaId ? Number(editing.quantidade) : 0;
+      return linha ? Number(linha.estoque_atual) + jaContado : 0;
+    }
+    if (tipo === "lanche") {
+      const linha = estoqueLanches.find((e) => e.lanche_id === lancheId);
+      const jaContado = editing && editing.tipo === "lanche" && editing.lanche_id === lancheId ? Number(editing.quantidade) : 0;
+      return linha ? Number(linha.estoque_atual) + jaContado : 0;
+    }
+    return null;
+  }, [tipo, bebidaId, lancheId, estoque, estoqueLanches, editing]);
 
   async function handleSubmit(e) {
     e.preventDefault();
     if (tipo === "bebida" && !bebidaId) { toast("Selecione uma bebida.", "error"); return; }
     if (tipo === "pizza" && !saborId) { toast("Selecione um sabor.", "error"); return; }
+    if (tipo === "lanche" && !lancheId) { toast("Selecione um lanche.", "error"); return; }
+    if (tipo === "combo" && !comboId) { toast("Selecione um combo.", "error"); return; }
     if (!canalId) { toast("Selecione o canal de venda.", "error"); return; }
     if (!quantidade || Number(quantidade) <= 0) { toast("Informe uma quantidade válida.", "error"); return; }
     if (precoFinal === null || precoFinal <= 0) { toast("Não foi possível calcular o preço. Revise a margem em Configurações.", "error"); return; }
-    if (tipo === "bebida" && estoqueDisponivel !== null && Number(quantidade) > estoqueDisponivel) {
+    if (estoqueDisponivel !== null && Number(quantidade) > estoqueDisponivel) {
       toast(`Estoque insuficiente: disponível ${estoqueDisponivel}.`, "error");
       return;
     }
@@ -133,6 +167,8 @@ function VendaModal({ editing, onClose, onSaved }) {
         bebida_id: tipo === "bebida" ? bebidaId : null,
         sabor_id: tipo === "pizza" ? saborId : null,
         tamanho: tipo === "pizza" ? tamanho : null,
+        lanche_id: tipo === "lanche" ? lancheId : null,
+        combo_id: tipo === "combo" ? comboId : null,
         canal_id: canalId,
         quantidade: Number(quantidade),
         preco_unitario: Number(precoFinal),
@@ -161,6 +197,8 @@ function VendaModal({ editing, onClose, onSaved }) {
         <div class="pill-toggle">
           <button type="button" class=${tipo === "bebida" ? "active" : ""} onClick=${() => setTipo("bebida")}>Bebida</button>
           <button type="button" class=${tipo === "pizza" ? "active" : ""} onClick=${() => setTipo("pizza")}>Pizza</button>
+          <button type="button" class=${tipo === "lanche" ? "active" : ""} onClick=${() => setTipo("lanche")}>Lanche</button>
+          <button type="button" class=${tipo === "combo" ? "active" : ""} onClick=${() => setTipo("combo")}>Combo</button>
         </div>
 
         ${tipo === "bebida" ? html`
@@ -171,7 +209,7 @@ function VendaModal({ editing, onClose, onSaved }) {
             </select>
             ${estoqueDisponivel !== null ? html`<span class="hint">Disponível em estoque: ${estoqueDisponivel}</span>` : null}
           </div>
-        ` : html`
+        ` : tipo === "pizza" ? html`
           <div class="form-grid cols-2">
             <div class="field">
               <label>Sabor</label>
@@ -185,6 +223,22 @@ function VendaModal({ editing, onClose, onSaved }) {
                 <option value="P">Pequena</option><option value="M">Média</option><option value="G">Grande</option>
               </select>
             </div>
+          </div>
+        ` : tipo === "lanche" ? html`
+          <div class="field">
+            <label>Lanche</label>
+            <select class="input" value=${lancheId} onChange=${(e) => setLancheId(e.target.value)}>
+              ${lanches.map((l) => html`<option key=${l.id} value=${l.id}>${l.nome}</option>`)}
+            </select>
+            ${estoqueDisponivel !== null ? html`<span class="hint">Disponível em estoque: ${estoqueDisponivel}</span>` : null}
+          </div>
+        ` : html`
+          <div class="field">
+            <label>Combo</label>
+            <select class="input" value=${comboId} onChange=${(e) => setComboId(e.target.value)}>
+              ${combos.map((c) => html`<option key=${c.id} value=${c.id}>${c.nome}</option>`)}
+            </select>
+            <span class="hint">Vendas de combo lançadas aqui não baixam automaticamente o estoque das bebidas/lanches inclusos — ajuste o Estoque manualmente se for o caso. Isso já acontece sozinho quando o combo é vendido pelo site de delivery.</span>
           </div>
         `}
 

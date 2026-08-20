@@ -9,6 +9,8 @@ import { DashboardPage } from "./pages/Dashboard.js";
 import { CaixaPage } from "./pages/Caixa.js";
 import { ComprasPage } from "./pages/Compras.js";
 import { ProdutosPage } from "./pages/Produtos.js";
+import { LanchesPage } from "./pages/Lanches.js";
+import { CombosPage } from "./pages/Combos.js";
 import { CardapioPage } from "./pages/Cardapio.js";
 import { VendasPage } from "./pages/Vendas.js";
 import { ClientesPage } from "./pages/Clientes.js";
@@ -25,6 +27,8 @@ const PAGES = {
   caixa: CaixaPage,
   compras: ComprasPage,
   produtos: ProdutosPage,
+  lanches: LanchesPage,
+  combos: CombosPage,
   cardapio: CardapioPage,
   vendas: VendasPage,
   clientes: ClientesPage,

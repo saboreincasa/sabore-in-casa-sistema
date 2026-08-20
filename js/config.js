@@ -19,6 +19,8 @@ export const NAV_ITEMS = [
   { key: "caixa", label: "Caixa", icon: "💰" },
   { key: "compras", label: "Compras", icon: "📦" },
   { key: "produtos", label: "Produtos", icon: "🛍️" },
+  { key: "lanches", label: "Lanches", icon: "🍟" },
+  { key: "combos", label: "Combos", icon: "🎁" },
   { key: "cardapio", label: "Cardápio (Pizzas)", icon: "🍕" },
   { key: "vendas", label: "Vendas", icon: "🛒" },
   { key: "clientes", label: "Clientes", icon: "👥" },

@@ -5,7 +5,7 @@ import { Modal, useConfirm, LoadingState, EmptyState, ImgThumb } from "../compon
 import { brl, dataCurta, dataHora, hojeISO } from "../format.js";
 
 export function ComprasPage() {
-  const { bebidas, fornecedores, toast, isAdmin, refreshEstoque } = useAppData();
+  const { bebidas, lanches, fornecedores, toast, isAdmin, refreshEstoque, refreshEstoqueLanches } = useAppData();
   const [compras, setCompras] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -17,7 +17,7 @@ export function ComprasPage() {
     try {
       const { data, error } = await supabase
         .from("compras")
-        .select("*, bebida:bebidas(nome, imagem_url, embalagem), fornecedor:fornecedores(nome)")
+        .select("*, bebida:bebidas(nome, imagem_url, embalagem), lanche:lanches(nome, imagem_url), fornecedor:fornecedores(nome)")
         .order("criado_em", { ascending: false })
         .limit(200);
       if (error) throw error;
@@ -34,15 +34,18 @@ export function ComprasPage() {
     setModalOpen(false);
     load();
     refreshEstoque();
+    refreshEstoqueLanches();
   }
 
   function handleDelete(row) {
-    confirm(`Excluir a compra de "${row.bebida?.nome}"? O estoque será ajustado automaticamente.`, async () => {
+    const nome = row.bebida?.nome || row.lanche?.nome;
+    confirm(`Excluir a compra de "${nome}"? O estoque será ajustado automaticamente.`, async () => {
       try {
         await deleteRow("compras", row.id);
         toast("Compra excluída.", "success");
         load();
         refreshEstoque();
+        refreshEstoqueLanches();
       } catch (e) {
         toast(`Erro ao excluir: ${e.message}`, "error");
       }
@@ -53,7 +56,7 @@ export function ComprasPage() {
     <div class="stack-6">
       <div class="row-between">
         <div><h1 class="h2" style="font-size:26px;">Compras</h1><p class="muted-text" style="margin:4px 0 0;">Registre entradas de insumos e reponha o estoque.</p></div>
-        <button class="btn btn-primary" disabled=${bebidas.length === 0} onClick=${() => { setEditing(null); setModalOpen(true); }}>+ Registrar Compra</button>
+        <button class="btn btn-primary" disabled=${bebidas.length === 0 && lanches.length === 0} onClick=${() => { setEditing(null); setModalOpen(true); }}>+ Registrar Compra</button>
       </div>
 
       <div class="card">
@@ -63,9 +66,11 @@ export function ComprasPage() {
             <table class="data-table">
               <thead><tr><th>Produto</th><th>Fornecedor</th><th>Qtd.</th><th>Custo Unit.</th><th>Total</th><th>Data</th><th></th></tr></thead>
               <tbody>
-                ${compras.map((c) => html`
+                ${compras.map((c) => {
+                  const item = c.bebida || c.lanche;
+                  return html`
                   <tr key=${c.id}>
-                    <td><div class="cell-product"><${ImgThumb} src=${c.bebida?.imagem_url} alt=${c.bebida?.nome} /><div><div class="cell-title">${c.bebida?.nome}</div><div class="cell-sub">${c.bebida?.embalagem || ""}</div></div></div></td>
+                    <td><div class="cell-product"><${ImgThumb} src=${item?.imagem_url} alt=${item?.nome} /><div><div class="cell-title">${item?.nome}</div><div class="cell-sub">${c.bebida?.embalagem || ""}</div></div></div></td>
                     <td>${c.fornecedor?.nome || "—"}</td>
                     <td>${c.quantidade}</td>
                     <td>${brl(c.custo_unitario)}</td>
@@ -76,7 +81,7 @@ export function ComprasPage() {
                       ${isAdmin ? html`<button class="icon-btn" title="Excluir" onClick=${() => handleDelete(c)}>🗑️</button>` : null}
                     </td>
                   </tr>
-                `)}
+                `;})}
               </tbody>
             </table>
           </div>
@@ -90,8 +95,10 @@ export function ComprasPage() {
 }
 
 function CompraModal({ editing, onClose, onSaved }) {
-  const { bebidas, fornecedores, toast } = useAppData();
+  const { bebidas, lanches, fornecedores, toast } = useAppData();
+  const [tipo, setTipo] = useState(editing?.lanche_id ? "lanche" : "bebida");
   const [bebidaId, setBebidaId] = useState(editing?.bebida_id || bebidas[0]?.id || "");
+  const [lancheId, setLancheId] = useState(editing?.lanche_id || lanches[0]?.id || "");
   const [quantidade, setQuantidade] = useState(editing?.quantidade ?? "");
   const [custoUnitario, setCustoUnitario] = useState(editing?.custo_unitario ?? "");
   const [fornecedorId, setFornecedorId] = useState(editing?.fornecedor_id || "");
@@ -101,13 +108,16 @@ function CompraModal({ editing, onClose, onSaved }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!bebidaId) { toast("Selecione um produto.", "error"); return; }
+    if (tipo === "bebida" && !bebidaId) { toast("Selecione um produto.", "error"); return; }
+    if (tipo === "lanche" && !lancheId) { toast("Selecione um lanche.", "error"); return; }
     if (!quantidade || Number(quantidade) <= 0) { toast("Informe uma quantidade válida.", "error"); return; }
     if (custoUnitario === "" || Number(custoUnitario) < 0) { toast("Informe o custo unitário.", "error"); return; }
     setSaving(true);
     try {
       const payload = {
-        bebida_id: bebidaId, quantidade: Number(quantidade), custo_unitario: Number(custoUnitario),
+        bebida_id: tipo === "bebida" ? bebidaId : null,
+        lanche_id: tipo === "lanche" ? lancheId : null,
+        quantidade: Number(quantidade), custo_unitario: Number(custoUnitario),
         fornecedor_id: fornecedorId || null, data, observacoes: observacoes || null,
       };
       if (editing) {
@@ -128,12 +138,25 @@ function CompraModal({ editing, onClose, onSaved }) {
   return html`
     <${Modal} title=${editing ? "Editar Compra" : "Registrar Compra"} onClose=${onClose}>
       <form onSubmit=${handleSubmit} class="stack-4">
+        <div class="pill-toggle">
+          <button type="button" class=${tipo === "bebida" ? "active" : ""} onClick=${() => setTipo("bebida")}>Bebida</button>
+          <button type="button" class=${tipo === "lanche" ? "active" : ""} onClick=${() => setTipo("lanche")}>Lanche</button>
+        </div>
+        ${tipo === "bebida" ? html`
         <div class="field">
           <label>Produto</label>
           <select class="input" value=${bebidaId} onChange=${(e) => setBebidaId(e.target.value)} required>
             ${bebidas.map((b) => html`<option key=${b.id} value=${b.id}>${b.nome}</option>`)}
           </select>
         </div>
+        ` : html`
+        <div class="field">
+          <label>Lanche</label>
+          <select class="input" value=${lancheId} onChange=${(e) => setLancheId(e.target.value)} required>
+            ${lanches.map((l) => html`<option key=${l.id} value=${l.id}>${l.nome}</option>`)}
+          </select>
+        </div>
+        `}
         <div class="form-grid cols-2">
           <div class="field">
             <label>Quantidade</label>
