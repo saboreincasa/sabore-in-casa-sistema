@@ -22,6 +22,7 @@ export function FinanceiroPage() {
   const [pctMarketing, setPctMarketing] = useState(8);
   const [pctCrescimento, setPctCrescimento] = useState(10);
   const [pctCapitalGiro, setPctCapitalGiro] = useState(10);
+  const [pctEmergencia, setPctEmergencia] = useState(10);
 
   async function load() {
     setLoading(true);
@@ -49,7 +50,8 @@ export function FinanceiroPage() {
   const valMarketing = Math.max(0, lucroOperacional * (pctMarketing / 100));
   const valCrescimento = Math.max(0, lucroOperacional * (pctCrescimento / 100));
   const valCapital = Math.max(0, lucroOperacional * (pctCapitalGiro / 100));
-  const lucroDono = lucroOperacional - valMarketing - valCrescimento - valCapital;
+  const valEmergencia = Math.max(0, lucroOperacional * (pctEmergencia / 100));
+  const lucroDono = lucroOperacional - valMarketing - valCrescimento - valCapital - valEmergencia;
 
   function handleSaved() { setModalOpen(false); load(); }
   function handleDelete(d) {
@@ -70,6 +72,7 @@ export function FinanceiroPage() {
     { label: "Marketing", valor: valMarketing, cor: "#7A9E5B" },
     { label: "Reserva de crescimento", valor: valCrescimento, cor: "#A8763E" },
     { label: "Capital de giro", valor: valCapital, cor: "var(--brown)" },
+    { label: "Fundo de emergência", valor: valEmergencia, cor: "#5B7A9E" },
     { label: "Lucro do dono", valor: lucroDono, cor: "var(--green)" },
   ];
 
@@ -90,12 +93,13 @@ export function FinanceiroPage() {
           <div class="kpi"><span class="label-muted">Lucro operacional</span><span class="kpi-value">${brl(lucroOperacional)}</span></div>
         </div>
 
-        <div class="form-grid cols-3" style="margin-bottom:18px;">
+        <div class="form-grid cols-4" style="margin-bottom:18px;">
           <div class="field"><label>Marketing (%)</label><input class="input" type="number" min="0" max="100" value=${pctMarketing} onInput=${(e) => setPctMarketing(Number(e.target.value))} /></div>
           <div class="field"><label>Reserva de crescimento (%)</label><input class="input" type="number" min="0" max="100" value=${pctCrescimento} onInput=${(e) => setPctCrescimento(Number(e.target.value))} /></div>
           <div class="field"><label>Capital de giro (%)</label><input class="input" type="number" min="0" max="100" value=${pctCapitalGiro} onInput=${(e) => setPctCapitalGiro(Number(e.target.value))} /></div>
+          <div class="field"><label>Fundo de emergência (%)</label><input class="input" type="number" min="0" max="100" value=${pctEmergencia} onInput=${(e) => setPctEmergencia(Number(e.target.value))} /></div>
         </div>
-        <p class="hint" style="margin-top:-8px;margin-bottom:16px;">Percentuais aplicados sobre o lucro operacional (receita − insumos reais − despesas fixas reais). Ajuste livremente para simular.</p>
+        <p class="hint" style="margin-top:-8px;margin-bottom:16px;">Percentuais aplicados sobre o lucro operacional (receita − insumos reais − despesas fixas reais). Capital de giro é o dinheiro reservado pra comprar mais insumo (repor estoque); fundo de emergência fica parado como reserva pra imprevistos. Ajuste livremente para simular — o que sobra vira "Lucro do dono".</p>
 
         <div style="display:flex;height:14px;border-radius:999px;overflow:hidden;margin-bottom:16px;">
           ${barras.map((b) => html`<div key=${b.label} style="width:${receitaMes > 0 ? Math.max(0, (b.valor / receitaMes) * 100) : 0}%;background:${b.cor};" title=${b.label}></div>`)}
