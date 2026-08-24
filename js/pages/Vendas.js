@@ -3,6 +3,7 @@ import { supabase } from "../supabaseClient.js";
 import { useAppData, insertRow, updateRow, deleteRow } from "../store.js";
 import { Modal, useConfirm, LoadingState, EmptyState, ImgThumb } from "../components/ui.js";
 import { brl, dataHora, precoSugerido } from "../format.js";
+import { FORMAS_PAGAMENTO } from "./Comandas.js";
 
 function nomeDaVenda(v) {
   if (v.tipo === "pizza") return `${v.sabor?.nome || "?"} (${v.tamanho})`;
@@ -69,7 +70,7 @@ export function VendasPage() {
         ${loading ? html`<${LoadingState} />` : vendas.length === 0 ? html`<${EmptyState}>Nenhuma venda registrada ainda.<//>` : html`
           <div class="table-wrap">
             <table class="data-table">
-              <thead><tr><th>Produto</th><th>Canal</th><th>Cliente</th><th>Qtd.</th><th>Preço</th><th>Total</th><th>Data</th><th></th></tr></thead>
+              <thead><tr><th>Produto</th><th>Canal</th><th>Pagamento</th><th>Cliente</th><th>Qtd.</th><th>Preço</th><th>Total</th><th>Data</th><th></th></tr></thead>
               <tbody>
                 ${vendas.map((v) => {
                   const nome = nomeDaVenda(v);
@@ -78,6 +79,7 @@ export function VendasPage() {
                     <tr key=${v.id}>
                       <td><div class="cell-product"><${ImgThumb} src=${img} alt=${nome} /><div class="cell-title">${nome}</div></div></td>
                       <td><span class="badge badge-neutral">${v.canal?.nome}</span></td>
+                      <td class="cell-sub">${v.comanda_id ? "Comanda" : FORMAS_PAGAMENTO.find((f) => f.value === v.forma_pagamento)?.label || "—"}</td>
                       <td class="cell-sub">${v.cliente?.nome || "—"}</td>
                       <td>${v.quantidade}</td>
                       <td>${brl(v.preco_unitario)}</td>
@@ -114,6 +116,7 @@ function VendaModal({ editing, onClose, onSaved }) {
   const [quantidade, setQuantidade] = useState(editing?.quantidade ?? 1);
   const [clienteId, setClienteId] = useState(editing?.cliente_id || "");
   const [precoManual, setPrecoManual] = useState(editing ? String(editing.preco_unitario) : "");
+  const [formaPagamento, setFormaPagamento] = useState(editing?.forma_pagamento || "dinheiro");
   const [observacoes, setObservacoes] = useState(editing?.observacoes || "");
   const [saving, setSaving] = useState(false);
 
@@ -175,6 +178,7 @@ function VendaModal({ editing, onClose, onSaved }) {
         custo_unitario: custoUnitario,
         cliente_id: clienteId || null,
         observacoes: observacoes || null,
+        forma_pagamento: formaPagamento,
       };
       if (editing) {
         await updateRow("vendas", editing.id, payload);
@@ -266,6 +270,15 @@ function VendaModal({ editing, onClose, onSaved }) {
           <div class="field">
             <label>Preço unitário (R$)</label>
             <input class="input" type="number" min="0" step="0.01" placeholder=${precoSugeridoCalc ? `Sugerido: ${brl(precoSugeridoCalc)}` : "—"} value=${precoManual} onInput=${(e) => setPrecoManual(e.target.value)} />
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Forma de pagamento</label>
+          <div class="pill-toggle">
+            ${FORMAS_PAGAMENTO.map(
+              (f) => html`<button type="button" key=${f.value} class=${formaPagamento === f.value ? "active" : ""} onClick=${() => setFormaPagamento(f.value)}>${f.label}</button>`
+            )}
           </div>
         </div>
 

@@ -12,6 +12,7 @@ export function CaixaPage() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [comandasAbertas, setComandasAbertas] = useState({ qtd: 0, pendente: 0 });
   const [confirm, confirmNode] = useConfirm();
 
   async function load() {
@@ -20,6 +21,17 @@ export function CaixaPage() {
       const { data, error } = await supabase.from("v_caixa").select("*").order("criado_em", { ascending: false }).limit(200);
       if (error) throw error;
       setLedger(data || []);
+
+      const { data: abertas, error: cErr } = await supabase.from("comandas").select("id").eq("status", "aberta");
+      if (cErr) throw cErr;
+      const ids = (abertas || []).map((c) => c.id);
+      let pendente = 0;
+      if (ids.length) {
+        const { data: itens, error: iErr } = await supabase.from("vendas").select("preco_unitario, quantidade").in("comanda_id", ids);
+        if (iErr) throw iErr;
+        pendente = (itens || []).reduce((s, v) => s + Number(v.preco_unitario) * Number(v.quantidade), 0);
+      }
+      setComandasAbertas({ qtd: ids.length, pendente });
     } catch (e) {
       toast(`Erro ao carregar caixa: ${e.message}`, "error");
     } finally {
@@ -55,6 +67,7 @@ export function CaixaPage() {
         <div class="card kpi"><${Kpi} icon="💰" label="Saldo atual" value=${brl(saldo)} tone="olive" /></div>
         <div class="card kpi"><${Kpi} icon="📈" label="Entradas" value=${brl(entradas)} tone="green" /></div>
         <div class="card kpi"><${Kpi} icon="📉" label="Saídas" value=${brl(saidas)} tone="red" /></div>
+        <div class="card kpi"><${Kpi} icon="🧾" label="Comandas em aberto" value=${String(comandasAbertas.qtd)} sub=${comandasAbertas.qtd ? `${brl(comandasAbertas.pendente)} pendente — não entra no saldo` : "Nada pendente"} tone="gold" /></div>
       </div>
 
       <div class="card">

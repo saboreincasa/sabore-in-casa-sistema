@@ -23,6 +23,7 @@ export const NAV_ITEMS = [
   { key: "combos", label: "Combos", icon: "🎁" },
   { key: "cardapio", label: "Cardápio (Pizzas)", icon: "🍕" },
   { key: "vendas", label: "Vendas", icon: "🛒" },
+  { key: "comandas", label: "Comandas", icon: "🧾" },
   { key: "clientes", label: "Clientes", icon: "👥" },
   { key: "estoque", label: "Estoque", icon: "🗃️" },
   { key: "fornecedores", label: "Fornecedores", icon: "🚚" },
