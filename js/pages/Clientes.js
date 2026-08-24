@@ -24,7 +24,11 @@ export function ClientesPage() {
         toast("Cliente excluído.", "success");
         refreshClientes();
       } catch (e) {
-        toast(`Erro ao excluir: ${e.message}`, "error");
+        if (e.code === "23503") {
+          toast(`"${c.nome}" tem vendas no histórico — não dá pra excluir sem apagar o histórico junto. Se for engano/teste, apague as vendas dele em Vendas primeiro.`, "error");
+        } else {
+          toast(`Erro ao excluir: ${e.message}`, "error");
+        }
       }
     });
   }
