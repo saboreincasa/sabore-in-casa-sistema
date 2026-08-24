@@ -2,7 +2,7 @@ import { html, useState, useEffect, useMemo } from "../lib.js";
 import { supabase } from "../supabaseClient.js";
 import { useAppData } from "../store.js";
 import { Kpi, Badge, ImgThumb, LoadingState, EmptyState } from "../components/ui.js";
-import { brl, pct, dataHora, hojeISO, precoSugerido, margemRealizada } from "../format.js";
+import { brl, pct, dataHora, hojeISO, precoSugerido, precoBebidaSugerido, margemRealizada } from "../format.js";
 
 export function DashboardPage({ setPage }) {
   const { bebidas, sabores, canais, config, estoque, toast } = useAppData();
@@ -59,7 +59,7 @@ export function DashboardPage({ setPage }) {
     if (!canalLocal) return [];
     const linhas = [];
     for (const b of bebidas.slice(0, 3)) {
-      const preco = precoSugerido(b.custo, config.margem_recomendada, canalLocal.comissao_pct, canalLocal.taxa_pagamento_pct);
+      const preco = precoBebidaSugerido(b, config.margem_recomendada, canalLocal.comissao_pct, canalLocal.taxa_pagamento_pct);
       const lucro = preco ? preco - b.custo : 0;
       linhas.push({ id: b.id, nome: b.nome, sub: b.embalagem, img: b.imagem_url, custo: b.custo, preco, lucro });
     }

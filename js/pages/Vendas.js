@@ -2,7 +2,7 @@ import { html, useState, useEffect, useMemo } from "../lib.js";
 import { supabase } from "../supabaseClient.js";
 import { useAppData, insertRow, updateRow, deleteRow } from "../store.js";
 import { Modal, useConfirm, LoadingState, EmptyState, ImgThumb } from "../components/ui.js";
-import { brl, dataHora, precoSugerido } from "../format.js";
+import { brl, dataHora, precoSugerido, precoBebidaSugerido } from "../format.js";
 import { FORMAS_PAGAMENTO } from "./Comandas.js";
 
 function nomeDaVenda(v) {
@@ -132,6 +132,7 @@ function VendaModal({ editing, onClose, onSaved }) {
     : 0; // combo: custo nao rastreado nas vendas manuais (so o pedido do delivery calcula isso)
 
   const precoSugeridoCalc = tipo === "combo" ? Number(combo?.preco || 0)
+    : tipo === "bebida" ? (canal ? precoBebidaSugerido(bebida, config.margem_recomendada, canal.comissao_pct, canal.taxa_pagamento_pct) : null)
     : canal ? precoSugerido(custoUnitario, config.margem_recomendada, canal.comissao_pct, canal.taxa_pagamento_pct)
     : null;
   const precoFinal = precoManual !== "" ? Number(precoManual) : precoSugeridoCalc;

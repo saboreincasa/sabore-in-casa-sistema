@@ -25,7 +25,7 @@ export function hojeISO() {
   return new Date(d - tz).toISOString().slice(0, 10);
 }
 
-function arredondaCima(v) {
+export function arredondaCima(v) {
   return Math.ceil(v * 10) / 10;
 }
 
@@ -36,6 +36,20 @@ export function precoSugerido(custo, margemPct, comissaoPct, taxaPagamentoPct) {
   const o = 1 - (comissaoPct + taxaPagamentoPct) / 100;
   if (l <= 0.01 || o <= 0.01) return null;
   return arredondaCima(custo / (l * o));
+}
+
+// Bebidas são item de custo conhecido (commodity), não artesanal como a pizza — a margem
+// alta da pizza não se aplica. Se a bebida já tem preço fixo calibrado (bebidas.preco_fixo),
+// esse é o preço real de venda local/whatsapp; em canais com comissão (iFood/99Food), só
+// repassa a comissão em cima desse preço fixo, sem aplicar a margem da pizza por cima.
+// Sem preco_fixo definido, cai no cálculo padrão (fallback) até alguém precificar à mão.
+export function precoBebidaSugerido(bebida, margemPct, comissaoPct, taxaPagamentoPct) {
+  if (bebida?.preco_fixo != null && bebida.preco_fixo !== "") {
+    const o = 1 - comissaoPct / 100;
+    if (o <= 0.01) return null;
+    return arredondaCima(Number(bebida.preco_fixo) / o);
+  }
+  return precoSugerido(Number(bebida?.custo || 0), margemPct, comissaoPct, taxaPagamentoPct);
 }
 
 export function margemRealizada(preco, custo) {

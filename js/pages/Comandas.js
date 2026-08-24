@@ -2,7 +2,7 @@ import { html, useState, useEffect } from "../lib.js";
 import { supabase } from "../supabaseClient.js";
 import { useAppData, insertRow, updateRow } from "../store.js";
 import { Modal, useConfirm, LoadingState, EmptyState } from "../components/ui.js";
-import { brl, dataHora, precoSugerido } from "../format.js";
+import { brl, dataHora, precoSugerido, precoBebidaSugerido } from "../format.js";
 
 export const FORMAS_PAGAMENTO = [
   { value: "dinheiro", label: "Dinheiro" },
@@ -268,6 +268,7 @@ function ItemComandaModal({ comanda, canais, onClose, onSaved }) {
 
   const precoCalc =
     tipo === "combo" ? Number(combo?.preco || 0)
+    : tipo === "bebida" ? (canalLocal ? precoBebidaSugerido(bebida, config.margem_recomendada, canalLocal.comissao_pct, canalLocal.taxa_pagamento_pct) : null)
     : canalLocal ? precoSugerido(custoUnitario, config.margem_recomendada, canalLocal.comissao_pct, canalLocal.taxa_pagamento_pct)
     : null;
 

@@ -2,7 +2,7 @@ import { html, useState } from "../lib.js";
 import { supabase } from "../supabaseClient.js";
 import { useAppData, insertRow, updateRow, deleteRow } from "../store.js";
 import { Modal, useConfirm, EmptyState, ImgThumb, Badge } from "../components/ui.js";
-import { brl, precoSugerido } from "../format.js";
+import { brl, precoBebidaSugerido } from "../format.js";
 import { uploadProdutoImagem, ImageUploadField } from "../components/ImageUpload.js";
 
 export function ProdutosPage() {
@@ -58,7 +58,7 @@ export function ProdutosPage() {
                       </div>
                     </td>
                     <td>${brl(b.custo)}</td>
-                    ${canais.map((c) => html`<td key=${c.id}>${brl(precoSugerido(b.custo, config.margem_recomendada, c.comissao_pct, c.taxa_pagamento_pct))}</td>`)}
+                    ${canais.map((c) => html`<td key=${c.id}>${brl(precoBebidaSugerido(b, config.margem_recomendada, c.comissao_pct, c.taxa_pagamento_pct))}</td>`)}
                     <td>${b.estoque_minimo}</td>
                     <td class="actions-cell">
                       ${!b.ativo ? html`<${Badge} tone="neutral">Inativo<//>` : null}
@@ -73,7 +73,7 @@ export function ProdutosPage() {
             </table>
           </div>
         `}
-        <p class="hint" style="margin-top:14px;">Preços calculados automaticamente pela margem recomendada (${config.margem_recomendada}%) menos comissão e taxa de pagamento de cada canal. Ajuste em Configurações.</p>
+        <p class="hint" style="margin-top:14px;">Bebida com preço fixo definido usa esse valor como base (só repassando a comissão de cada canal); sem preço fixo, cai na margem recomendada (${config.margem_recomendada}%) menos comissão e taxa de pagamento. Ajuste em Configurações.</p>
       </div>
 
       ${modalOpen ? html`<${ProdutoModal} editing=${editing} onClose=${() => setModalOpen(false)} onSaved=${handleSaved} />` : null}
