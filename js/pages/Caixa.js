@@ -3,6 +3,7 @@ import { supabase } from "../supabaseClient.js";
 import { useAppData, insertRow, updateRow, deleteRow } from "../store.js";
 import { Kpi, Modal, useConfirm, LoadingState, EmptyState } from "../components/ui.js";
 import { brl, dataCurta, dataHora, hojeISO } from "../format.js";
+import { FORMAS_PAGAMENTO } from "./Comandas.js";
 
 const CATEGORIAS_MANUAL = ["Sangria", "Recebimento", "Aporte", "Despesa avulsa", "Pagamento de conta", "Outro"];
 
@@ -13,12 +14,15 @@ export function CaixaPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [comandasAbertas, setComandasAbertas] = useState({ qtd: 0, pendente: 0 });
+  const [periodo, setPeriodo] = useState("hoje");
   const [confirm, confirmNode] = useConfirm();
 
   async function load() {
     setLoading(true);
     try {
-      const { data, error } = await supabase.from("v_caixa").select("*").order("criado_em", { ascending: false }).limit(200);
+      let query = supabase.from("v_caixa").select("*").order("criado_em", { ascending: false });
+      query = periodo === "hoje" ? query.eq("data", hojeISO()).limit(500) : query.limit(200);
+      const { data, error } = await query;
       if (error) throw error;
       setLedger(data || []);
 
@@ -38,11 +42,19 @@ export function CaixaPage() {
       setLoading(false);
     }
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [periodo]);
 
   const saldo = useMemo(() => ledger.reduce((s, r) => s + (r.tipo === "entrada" ? Number(r.valor) : -Number(r.valor)), 0), [ledger]);
   const entradas = useMemo(() => ledger.filter((r) => r.tipo === "entrada").reduce((s, r) => s + Number(r.valor), 0), [ledger]);
   const saidas = useMemo(() => ledger.filter((r) => r.tipo === "saida").reduce((s, r) => s + Number(r.valor), 0), [ledger]);
+  const porFormaPagamento = useMemo(() => {
+    const grupos = {};
+    ledger.filter((r) => r.tipo === "entrada").forEach((r) => {
+      const chave = r.forma_pagamento || "nao_informado";
+      grupos[chave] = (grupos[chave] || 0) + Number(r.valor);
+    });
+    return grupos;
+  }, [ledger]);
 
   async function handleDelete(row) {
     confirm(`Excluir o lançamento "${row.categoria}" de ${brl(row.valor)}?`, async () => {
@@ -60,7 +72,13 @@ export function CaixaPage() {
     <div class="stack-6">
       <div class="row-between">
         <div><h1 class="h2" style="font-size:26px;">Caixa</h1><p class="muted-text" style="margin:4px 0 0;">Movimentações financeiras do negócio.</p></div>
-        <button class="btn btn-primary" onClick=${() => { setEditing(null); setModalOpen(true); }}>+ Novo Lançamento</button>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <div class="pill-toggle">
+            <button type="button" class=${periodo === "hoje" ? "active" : ""} onClick=${() => setPeriodo("hoje")}>Hoje</button>
+            <button type="button" class=${periodo === "tudo" ? "active" : ""} onClick=${() => setPeriodo("tudo")}>Últimos lançamentos</button>
+          </div>
+          <button class="btn btn-primary" onClick=${() => { setEditing(null); setModalOpen(true); }}>+ Novo Lançamento</button>
+        </div>
       </div>
 
       <div class="kpi-row">
@@ -71,11 +89,34 @@ export function CaixaPage() {
       </div>
 
       <div class="card">
+        <h3 style="margin:0 0 4px;font-size:16px;">Fechamento por forma de pagamento</h3>
+        <p class="muted-text small" style="margin:0 0 16px;">${periodo === "hoje" ? "Vendas de hoje" : "Últimos lançamentos"} — confere com a gaveta e o extrato da maquininha.</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;">
+          ${FORMAS_PAGAMENTO.map(
+            (f) => html`
+              <div key=${f.value} class="card tight" style="background:var(--bg2);">
+                <div class="muted-text small">${f.label}</div>
+                <div class="bold text-green" style="font-size:19px;">${brl(porFormaPagamento[f.value] || 0)}</div>
+              </div>
+            `
+          )}
+          ${porFormaPagamento.nao_informado
+            ? html`
+                <div class="card tight" style="background:var(--bg2);">
+                  <div class="muted-text small">Não informado</div>
+                  <div class="bold" style="font-size:19px;">${brl(porFormaPagamento.nao_informado)}</div>
+                </div>
+              `
+            : null}
+        </div>
+      </div>
+
+      <div class="card">
         <h3 style="margin:0 0 16px;font-size:16px;">Extrato</h3>
         ${loading ? html`<${LoadingState} />` : ledger.length === 0 ? html`<${EmptyState}>Nenhum lançamento ainda.<//>` : html`
           <div class="table-wrap">
             <table class="data-table">
-              <thead><tr><th>Data</th><th>Categoria</th><th>Descrição</th><th>Origem</th><th>Valor</th><th></th></tr></thead>
+              <thead><tr><th>Data</th><th>Categoria</th><th>Descrição</th><th>Origem</th><th>Pagamento</th><th>Valor</th><th></th></tr></thead>
               <tbody>
                 ${ledger.map((r) => html`
                   <tr key=${r.id}>
@@ -83,6 +124,7 @@ export function CaixaPage() {
                     <td class="cell-title">${r.categoria}</td>
                     <td class="cell-sub">${r.descricao || "—"}</td>
                     <td><span class="badge badge-neutral">${r.origem === "manual" ? "Manual" : r.origem === "venda" ? "Venda" : "Compra"}</span></td>
+                    <td class="cell-sub">${FORMAS_PAGAMENTO.find((f) => f.value === r.forma_pagamento)?.label || "—"}</td>
                     <td class=${r.tipo === "entrada" ? "text-green bold" : "text-red bold"}>${r.tipo === "entrada" ? "+" : "-"} ${brl(r.valor)}</td>
                     <td class="actions-cell">
                       ${r.origem === "manual" ? html`
