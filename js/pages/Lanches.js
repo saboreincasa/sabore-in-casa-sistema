@@ -1,7 +1,7 @@
 import { html, useState } from "../lib.js";
 import { useAppData, insertRow, updateRow, deleteRow } from "../store.js";
 import { Modal, useConfirm, EmptyState, ImgThumb, Badge } from "../components/ui.js";
-import { brl, precoSugerido } from "../format.js";
+import { brl, precoBebidaSugerido } from "../format.js";
 import { ImageUploadField } from "../components/ImageUpload.js";
 
 export function LanchesPage() {
@@ -57,7 +57,7 @@ export function LanchesPage() {
                       </div>
                     </td>
                     <td>${brl(l.custo)}</td>
-                    ${canais.map((c) => html`<td key=${c.id}>${brl(precoSugerido(l.custo, config.margem_recomendada, c.comissao_pct, c.taxa_pagamento_pct))}</td>`)}
+                    ${canais.map((c) => html`<td key=${c.id}>${brl(precoBebidaSugerido(l, config.margem_recomendada, c.comissao_pct, c.taxa_pagamento_pct))}</td>`)}
                     <td>${l.estoque_minimo}</td>
                     <td class="actions-cell">
                       ${!l.ativo ? html`<${Badge} tone="neutral">Inativo<//>` : null}
@@ -72,7 +72,7 @@ export function LanchesPage() {
             </table>
           </div>
         `}
-        <p class="hint" style="margin-top:14px;">Preços calculados automaticamente pela margem recomendada (${config.margem_recomendada}%) menos comissão e taxa de pagamento de cada canal. Ajuste em Configurações.</p>
+        <p class="hint" style="margin-top:14px;">Lanche com preço fixo definido usa esse valor como base (só repassando a comissão de cada canal); sem preço fixo, cai na margem recomendada (${config.margem_recomendada}%) menos comissão e taxa de pagamento. Ajuste em Configurações.</p>
       </div>
 
       ${modalOpen ? html`<${LancheModal} editing=${editing} onClose=${() => setModalOpen(false)} onSaved=${handleSaved} />` : null}

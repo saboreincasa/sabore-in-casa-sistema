@@ -133,6 +133,7 @@ function VendaModal({ editing, onClose, onSaved }) {
 
   const precoSugeridoCalc = tipo === "combo" ? Number(combo?.preco || 0)
     : tipo === "bebida" ? (canal ? precoBebidaSugerido(bebida, config.margem_recomendada, canal.comissao_pct, canal.taxa_pagamento_pct) : null)
+    : tipo === "lanche" ? (canal ? precoBebidaSugerido(lanche, config.margem_recomendada, canal.comissao_pct, canal.taxa_pagamento_pct) : null)
     : canal ? precoSugerido(custoUnitario, config.margem_recomendada, canal.comissao_pct, canal.taxa_pagamento_pct)
     : null;
   const precoFinal = precoManual !== "" ? Number(precoManual) : precoSugeridoCalc;

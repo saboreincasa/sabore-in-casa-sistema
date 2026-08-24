@@ -1,6 +1,6 @@
 import { html, useState, useEffect } from "../lib.js";
 import { supabase } from "../supabaseClient.js";
-import { useAppData, insertRow, updateRow } from "../store.js";
+import { useAppData, insertRow, updateRow, deleteRow } from "../store.js";
 import { Modal, useConfirm, LoadingState, EmptyState } from "../components/ui.js";
 import { brl, dataHora, precoSugerido, precoBebidaSugerido } from "../format.js";
 
@@ -112,6 +112,28 @@ export function ComandasPage() {
     refreshEstoqueLanches();
   }
 
+  function handleExcluir(comanda) {
+    confirm(
+      `Excluir a comanda "${comanda.identificador}" e todos os seus itens? Isso apaga o histórico e devolve os itens pro estoque — use só pra testes ou erro de lançamento, não pra desfazer uma venda real.`,
+      async () => {
+        try {
+          const itens = itensPorComanda[comanda.id] || [];
+          for (const item of itens) {
+            await deleteRow("vendas", item.id);
+          }
+          await deleteRow("comandas", comanda.id);
+          toast("Comanda excluída.", "success");
+          load();
+          refreshEstoque();
+          refreshEstoqueLanches();
+        } catch (e) {
+          toast(`Erro ao excluir: ${e.message}`, "error");
+        }
+      },
+      { danger: true, title: "Excluir comanda" }
+    );
+  }
+
   return html`
     <div class="stack-6">
       <div class="row-between">
@@ -172,7 +194,7 @@ export function ComandasPage() {
           : html`
               <div class="table-wrap">
                 <table class="data-table">
-                  <thead><tr><th>Comanda</th><th>Cliente</th><th>Itens</th><th>Total</th><th>Situação</th><th>Fechada em</th></tr></thead>
+                  <thead><tr><th>Comanda</th><th>Cliente</th><th>Itens</th><th>Total</th><th>Situação</th><th>Fechada em</th><th></th></tr></thead>
                   <tbody>
                     ${fechadasRecentes.map(
                       (c) => html`
@@ -187,6 +209,9 @@ export function ComandasPage() {
                             </span>
                           </td>
                           <td class="cell-sub">${dataHora(c.fechada_em)}</td>
+                          <td class="actions-cell">
+                            ${isAdmin ? html`<button class="icon-btn" title="Excluir comanda" onClick=${() => handleExcluir(c)}>🗑️</button>` : null}
+                          </td>
                         </tr>
                       `
                     )}
@@ -269,6 +294,7 @@ function ItemComandaModal({ comanda, canais, onClose, onSaved }) {
   const precoCalc =
     tipo === "combo" ? Number(combo?.preco || 0)
     : tipo === "bebida" ? (canalLocal ? precoBebidaSugerido(bebida, config.margem_recomendada, canalLocal.comissao_pct, canalLocal.taxa_pagamento_pct) : null)
+    : tipo === "lanche" ? (canalLocal ? precoBebidaSugerido(lanche, config.margem_recomendada, canalLocal.comissao_pct, canalLocal.taxa_pagamento_pct) : null)
     : canalLocal ? precoSugerido(custoUnitario, config.margem_recomendada, canalLocal.comissao_pct, canalLocal.taxa_pagamento_pct)
     : null;
 
