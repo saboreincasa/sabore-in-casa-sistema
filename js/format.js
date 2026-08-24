@@ -40,11 +40,14 @@ export function precoSugerido(custo, margemPct, comissaoPct, taxaPagamentoPct) {
 
 // Bebidas são item de custo conhecido (commodity), não artesanal como a pizza — a margem
 // alta da pizza não se aplica. Se a bebida já tem preço fixo calibrado (bebidas.preco_fixo),
-// esse é o preço real de venda local/whatsapp; em canais com comissão (iFood/99Food), só
-// repassa a comissão em cima desse preço fixo, sem aplicar a margem da pizza por cima.
-// Sem preco_fixo definido, cai no cálculo padrão (fallback) até alguém precificar à mão.
+// esse é o preço real de venda local/whatsapp (comissão 0, sempre usa o valor fixo). Em canal
+// com comissão (iFood/99Food), repassa a comissão em cima do preço fixo — a menos que a bebida
+// tenha aplica_preco_fixo_comissao=false (caso da água: mantém o cálculo padrão nesses canais,
+// preço fixo só vale onde não há comissão). Sem preco_fixo definido, cai no cálculo padrão.
 export function precoBebidaSugerido(bebida, margemPct, comissaoPct, taxaPagamentoPct) {
-  if (bebida?.preco_fixo != null && bebida.preco_fixo !== "") {
+  const temFixo = bebida?.preco_fixo != null && bebida.preco_fixo !== "";
+  const usaFixoNesseCanal = comissaoPct === 0 || bebida?.aplica_preco_fixo_comissao !== false;
+  if (temFixo && usaFixoNesseCanal) {
     const o = 1 - comissaoPct / 100;
     if (o <= 0.01) return null;
     return arredondaCima(Number(bebida.preco_fixo) / o);
