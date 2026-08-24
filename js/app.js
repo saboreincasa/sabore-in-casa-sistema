@@ -99,5 +99,11 @@ function MainApp() {
   `;
 }
 
+// O navegador so oferece "Instalar app" com um service worker ativo -
+// sem isso, o manifest.json sozinho nao e suficiente.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(html`<${AuthGate} />`);

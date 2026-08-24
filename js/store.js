@@ -51,6 +51,25 @@ export function AppDataProvider({ session, profile, children }) {
   const [profiles, setProfiles] = useState([]);
   const [toasts, setToasts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [promptInstalacao, setPromptInstalacao] = useState(null);
+
+  useEffect(() => {
+    const onBeforeInstall = (e) => { e.preventDefault(); setPromptInstalacao(e); };
+    const onInstalled = () => setPromptInstalacao(null);
+    window.addEventListener("beforeinstallprompt", onBeforeInstall);
+    window.addEventListener("appinstalled", onInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onBeforeInstall);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
+  }, []);
+
+  const instalarApp = useCallback(async () => {
+    if (!promptInstalacao) return;
+    promptInstalacao.prompt();
+    await promptInstalacao.userChoice;
+    setPromptInstalacao(null);
+  }, [promptInstalacao]);
 
   const toast = useCallback((message, type = "info") => {
     const id = ++toastId;
@@ -116,6 +135,7 @@ export function AppDataProvider({ session, profile, children }) {
     refreshBebidas, refreshSabores, refreshLanches, refreshCombos, refreshCanais, refreshConfig, refreshClientes,
     refreshFornecedores, refreshEstoque, refreshEstoqueLanches, refreshProfiles, refreshAll,
     toast,
+    podeInstalar: !!promptInstalacao, instalarApp,
     signOut: () => supabase.auth.signOut(),
   };
 

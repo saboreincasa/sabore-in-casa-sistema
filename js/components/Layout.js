@@ -4,7 +4,7 @@ import { useAppData } from "../store.js";
 import { initials } from "../format.js";
 
 export function Sidebar({ page, setPage }) {
-  const { profile, signOut } = useAppData();
+  const { profile, signOut, podeInstalar, instalarApp } = useAppData();
   return html`
     <aside class="sidebar">
       <div class="brand">
@@ -25,6 +25,7 @@ export function Sidebar({ page, setPage }) {
         </button>
       `)}
       <div class="nav-footer">
+        ${podeInstalar ? html`<button class="btn btn-primary btn-sm" style="width:100%;margin-bottom:10px;" onClick=${instalarApp}>⬇️ Instalar app</button>` : null}
         <div class="user-chip">
           <div class="user-avatar">${initials(profile?.nome)}</div>
           <div>
