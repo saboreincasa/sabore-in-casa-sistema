@@ -14,6 +14,7 @@ import { CombosPage } from "./pages/Combos.js";
 import { CardapioPage } from "./pages/Cardapio.js";
 import { VendasPage } from "./pages/Vendas.js";
 import { ComandasPage } from "./pages/Comandas.js";
+import { PedidosOnlinePage } from "./pages/PedidosOnline.js";
 import { ClientesPage } from "./pages/Clientes.js";
 import { EstoquePage } from "./pages/Estoque.js";
 import { FornecedoresPage } from "./pages/Fornecedores.js";
@@ -33,6 +34,7 @@ const PAGES = {
   cardapio: CardapioPage,
   vendas: VendasPage,
   comandas: ComandasPage,
+  pedidosOnline: PedidosOnlinePage,
   clientes: ClientesPage,
   estoque: EstoquePage,
   fornecedores: FornecedoresPage,
