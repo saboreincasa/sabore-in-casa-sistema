@@ -1,5 +1,8 @@
-import { React, html, useState, useEffect, useCallback, createContext, useContext } from "./lib.js";
+import { React, html, useState, useEffect, useCallback, useRef, createContext, useContext } from "./lib.js";
 import { supabase } from "./supabaseClient.js";
+
+const MINUTOS_ALERTA_PAGAMENTO = 5;
+const STATUS_PRECISA_ATENCAO = ["aguardando_pagamento", "pago", "em_preparo", "saiu_entrega"];
 
 // ---------- Generic CRUD helpers ----------
 export async function fetchAll(table, { order = null, ascending = false, select = "*" } = {}) {
@@ -52,6 +55,55 @@ export function AppDataProvider({ session, profile, children }) {
   const [toasts, setToasts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [promptInstalacao, setPromptInstalacao] = useState(null);
+  const [pedidosPrecisandoAtencao, setPedidosPrecisandoAtencao] = useState(0);
+  const jaAlertados = useRef(new Set());
+
+  const ativarAlertasPedido = useCallback(async () => {
+    if (!("Notification" in window)) return "indisponivel";
+    if (Notification.permission === "granted") return "concedida";
+    return await Notification.requestPermission();
+  }, []);
+
+  // Fica de olho em pedidos parados esperando pagamento - manda uma notificacao
+  // do navegador (funciona com o app aberto, mesmo minimizado ou em outra aba;
+  // nao funciona com o app totalmente fechado, isso exigiria a API paga do
+  // WhatsApp/push server) quando um pedido passa de 5 min sem pagar, e mantem
+  // a contagem de "precisam de atencao" pro badge no menu.
+  useEffect(() => {
+    async function verificarPedidos() {
+      try {
+        const { data, error } = await supabase
+          .from("pedidos")
+          .select("id, cliente_nome, cliente_telefone, status, criado_em")
+          .in("status", STATUS_PRECISA_ATENCAO)
+          .order("criado_em", { ascending: false })
+          .limit(100);
+        if (error) throw error;
+        const lista = data || [];
+        setPedidosPrecisandoAtencao(lista.length);
+
+        if (Notification.permission === "granted") {
+          const agora = Date.now();
+          lista.forEach((p) => {
+            if (p.status !== "aguardando_pagamento" || jaAlertados.current.has(p.id)) return;
+            const minutos = (agora - new Date(p.criado_em).getTime()) / 60000;
+            if (minutos >= MINUTOS_ALERTA_PAGAMENTO) {
+              jaAlertados.current.add(p.id);
+              new Notification("Pedido esperando pagamento", {
+                body: `${p.cliente_nome} está há ${Math.floor(minutos)} min sem pagar. Bora mandar um lembrete?`,
+                tag: `pedido-${p.id}`,
+              });
+            }
+          });
+        }
+      } catch (e) {
+        console.error("Erro ao checar pedidos pendentes:", e);
+      }
+    }
+    verificarPedidos();
+    const id = setInterval(verificarPedidos, 30000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     const onBeforeInstall = (e) => { e.preventDefault(); setPromptInstalacao(e); };
@@ -136,6 +188,7 @@ export function AppDataProvider({ session, profile, children }) {
     refreshFornecedores, refreshEstoque, refreshEstoqueLanches, refreshProfiles, refreshAll,
     toast,
     podeInstalar: !!promptInstalacao, instalarApp,
+    pedidosPrecisandoAtencao, ativarAlertasPedido,
     signOut: () => supabase.auth.signOut(),
   };
 

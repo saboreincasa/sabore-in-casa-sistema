@@ -4,7 +4,7 @@ import { useAppData } from "../store.js";
 import { initials } from "../format.js";
 
 export function Sidebar({ page, setPage }) {
-  const { profile, signOut, podeInstalar, instalarApp } = useAppData();
+  const { profile, signOut, podeInstalar, instalarApp, pedidosPrecisandoAtencao } = useAppData();
   return html`
     <aside class="sidebar">
       <div class="brand">
@@ -19,9 +19,13 @@ export function Sidebar({ page, setPage }) {
           key=${item.key}
           class="nav-btn ${page === item.key ? "active" : ""}"
           onClick=${() => setPage(item.key)}
+          style="position:relative;"
         >
           <span class="nav-icon">${item.icon}</span>
           <span class="nav-label">${item.label}</span>
+          ${item.key === "pedidosOnline" && pedidosPrecisandoAtencao > 0
+            ? html`<span style="margin-left:auto;background:var(--red,#B3261E);color:#fff;border-radius:999px;min-width:20px;height:20px;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 5px;">${pedidosPrecisandoAtencao}</span>`
+            : null}
         </button>
       `)}
       <div class="nav-footer">
@@ -40,6 +44,7 @@ export function Sidebar({ page, setPage }) {
 }
 
 export function MobileNav({ page, setPage }) {
+  const { pedidosPrecisandoAtencao } = useAppData();
   return html`
     <nav class="mobile-nav">
       ${NAV_ITEMS.map((item) => html`
@@ -47,7 +52,7 @@ export function MobileNav({ page, setPage }) {
           key=${item.key}
           class="mobile-pill ${page === item.key ? "active" : ""}"
           onClick=${() => setPage(item.key)}
-        >${item.icon} ${item.label}</button>
+        >${item.icon} ${item.label}${item.key === "pedidosOnline" && pedidosPrecisandoAtencao > 0 ? ` (${pedidosPrecisandoAtencao})` : ""}</button>
       `)}
     </nav>
   `;

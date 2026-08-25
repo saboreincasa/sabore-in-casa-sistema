@@ -46,12 +46,22 @@ function nomeDoItem(item, { bebidas, sabores, lanches, combos }) {
 }
 
 export function PedidosOnlinePage() {
-  const { toast, isAdmin, bebidas, sabores, lanches, combos } = useAppData();
+  const { toast, isAdmin, bebidas, sabores, lanches, combos, ativarAlertasPedido } = useAppData();
   const [pedidos, setPedidos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [agora, setAgora] = useState(Date.now());
+  const [alertasStatus, setAlertasStatus] = useState(
+    "Notification" in window ? Notification.permission : "indisponivel"
+  );
   const [confirm, confirmNode] = useConfirm();
   const catalogo = { bebidas, sabores, lanches, combos };
+
+  async function handleAtivarAlertas() {
+    const resultado = await ativarAlertasPedido();
+    setAlertasStatus(resultado);
+    if (resultado === "granted" || resultado === "concedida") toast("Alertas ativados! Você recebe um aviso quando um pedido passar de 5 min sem pagar.", "success");
+    else if (resultado === "denied") toast("Alertas bloqueados pelo navegador. Ative nas permissões do site se mudar de ideia.", "error");
+  }
 
   async function load() {
     setLoading(true);
@@ -146,6 +156,13 @@ export function PedidosOnlinePage() {
           <h1 class="h2" style="font-size:26px;">Pedidos Online</h1>
           <p class="muted-text" style="margin:4px 0 0;">Pedidos pagos por Pix/cartão no site — pago vira venda sozinho, aqui você acompanha o preparo e a entrega.</p>
         </div>
+        ${alertasStatus === "granted"
+          ? html`<span class="badge badge-green">🔔 Alertas ativados</span>`
+          : alertasStatus === "denied"
+          ? html`<span class="badge badge-red" title="Bloqueado nas permissões do navegador">🔕 Alertas bloqueados</span>`
+          : alertasStatus === "indisponivel"
+          ? null
+          : html`<button class="btn btn-secondary btn-sm" onClick=${handleAtivarAlertas}>🔔 Ativar alertas de pedido parado</button>`}
       </div>
 
       <div class="card">
