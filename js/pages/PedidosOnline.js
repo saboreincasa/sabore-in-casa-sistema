@@ -1,8 +1,25 @@
 import { html, useState, useEffect } from "../lib.js";
 import { supabase } from "../supabaseClient.js";
-import { useAppData, updateRow } from "../store.js";
-import { LoadingState, EmptyState } from "../components/ui.js";
+import { useAppData, updateRow, deleteRow } from "../store.js";
+import { LoadingState, EmptyState, useConfirm } from "../components/ui.js";
 import { brl, dataHora } from "../format.js";
+
+const MINUTOS_PARA_LEMBRETE = 5;
+
+// Mensagem de lembrete pra quem gerou o Pix/cartao mas nao terminou de pagar -
+// especifica (item + valor), reforça que o pedido continua reservado (perda
+// de algo ja "seu" pesa mais que ganhar algo novo) e remove qualquer atrito
+// do proximo passo (oferece ajuda, deixa claro que e so mandar o comprovante).
+function montarMensagemLembrete(pedido, itensTexto) {
+  const primeiroNome = (pedido.cliente_nome || "").trim().split(/\s+/)[0] || "";
+  return `Oi${primeiroNome ? " " + primeiroNome : ""}! 🍕 Aqui é da Sabore In Casa. Vi que seu pedido (${itensTexto}) de ${brl(pedido.total)} ainda tá esperando o pagamento — mas fica tranquilo, ele continua reservado pra você! Assim que finalizar o Pix, é só me mandar o comprovante aqui que a pizza já entra no forno 😉 Precisa de alguma ajuda?`;
+}
+
+function linkWhatsApp(telefone, mensagem) {
+  const numero = (telefone || "").replace(/\D/g, "");
+  const comDDI = numero.startsWith("55") ? numero : `55${numero}`;
+  return `https://wa.me/${comDDI}?text=${encodeURIComponent(mensagem)}`;
+}
 
 const STATUS_INFO = {
   aguardando_pagamento: { label: "Aguardando pagamento", tone: "badge-gold" },
@@ -29,9 +46,11 @@ function nomeDoItem(item, { bebidas, sabores, lanches, combos }) {
 }
 
 export function PedidosOnlinePage() {
-  const { toast, bebidas, sabores, lanches, combos } = useAppData();
+  const { toast, isAdmin, bebidas, sabores, lanches, combos } = useAppData();
   const [pedidos, setPedidos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [agora, setAgora] = useState(Date.now());
+  const [confirm, confirmNode] = useConfirm();
   const catalogo = { bebidas, sabores, lanches, combos };
 
   async function load() {
@@ -47,6 +66,8 @@ export function PedidosOnlinePage() {
     }
   }
   useEffect(() => { load(); }, []);
+  // Reavalia quem passou de 5 min esperando pagamento a cada 30s, sem precisar recarregar a pagina.
+  useEffect(() => { const id = setInterval(() => setAgora(Date.now()), 30000); return () => clearInterval(id); }, []);
 
   async function avancarStatus(pedido, novoStatus) {
     try {
@@ -58,6 +79,22 @@ export function PedidosOnlinePage() {
     }
   }
 
+  function handleExcluir(pedido) {
+    confirm(
+      `Excluir o pedido de "${pedido.cliente_nome}" (${brl(pedido.total)})? Use só pra pedido de teste ou abandonado sem pagamento — se ele já virou venda, exclua a venda em Vendas, não aqui.`,
+      async () => {
+        try {
+          await deleteRow("pedidos", pedido.id);
+          toast("Pedido excluído.", "success");
+          load();
+        } catch (e) {
+          toast(`Erro ao excluir: ${e.message}`, "error");
+        }
+      },
+      { danger: true, title: "Excluir pedido" }
+    );
+  }
+
   const pendentesAtencao = pedidos.filter((p) => p.status === "aguardando_pagamento" || p.status === "pago" || p.status === "em_preparo" || p.status === "saiu_entrega");
   const historico = pedidos.filter((p) => !pendentesAtencao.includes(p)).slice(0, 30);
 
@@ -65,6 +102,10 @@ export function PedidosOnlinePage() {
     const itens = Array.isArray(p.itens) ? p.itens : [];
     const info = STATUS_INFO[p.status] || { label: p.status, tone: "badge-neutral" };
     const proximos = PROXIMO_STATUS[p.status] || [];
+    const itensTexto = itens.map((it) => `${it.quantidade || it.qtd || 1}x ${nomeDoItem(it, catalogo)}`).join(", ") || "seu pedido";
+    const minutosEsperando = (agora - new Date(p.criado_em).getTime()) / 60000;
+    const precisaLembrete = p.status === "aguardando_pagamento" && minutosEsperando >= MINUTOS_PARA_LEMBRETE && p.cliente_telefone;
+
     return html`
       <div key=${p.id} class="card tight" style="background:var(--bg2);">
         <div class="row-between">
@@ -84,11 +125,16 @@ export function PedidosOnlinePage() {
           <span class="muted-text small">Total · ${p.forma_pagamento ? p.forma_pagamento.toUpperCase() : "—"}</span>
           <span class="bold text-green">${brl(p.total)}</span>
         </div>
-        ${proximos.length
-          ? html`<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
-              ${proximos.map(([status, label]) => html`<button key=${status} class="btn btn-secondary btn-sm" onClick=${() => avancarStatus(p, status)}>${label}</button>`)}
+        ${precisaLembrete
+          ? html`<div class="card tight" style="background:var(--warn-bg,#f5e6c8);margin-top:10px;padding:10px 12px;">
+              <div class="muted-text small" style="margin-bottom:6px;">⏰ Sem pagar há ${Math.floor(minutosEsperando)} min — mande um lembrete?</div>
+              <a href=${linkWhatsApp(p.cliente_telefone, montarMensagemLembrete(p, itensTexto))} target="_blank" class="btn btn-primary btn-sm" style="text-decoration:none;display:inline-block;">Enviar lembrete no WhatsApp</a>
             </div>`
           : null}
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
+          ${proximos.map(([status, label]) => html`<button key=${status} class="btn btn-secondary btn-sm" onClick=${() => avancarStatus(p, status)}>${label}</button>`)}
+          ${isAdmin ? html`<button class="icon-btn" title="Excluir pedido" onClick=${() => handleExcluir(p)} style="margin-left:auto;">🗑️</button>` : null}
+        </div>
       </div>
     `;
   }
@@ -117,6 +163,7 @@ export function PedidosOnlinePage() {
           ? html`<${EmptyState}>Nada por aqui ainda.<//>`
           : html`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;">${historico.map(Cartao)}</div>`}
       </div>
+      ${confirmNode}
     </div>
   `;
 }
