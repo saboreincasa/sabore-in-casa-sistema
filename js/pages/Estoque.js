@@ -42,7 +42,7 @@ function TabelaEstoque({ titulo, itens, idField, onAjustar }) {
 }
 
 export function EstoquePage() {
-  const { estoque, estoqueLanches, toast, refreshEstoque, refreshEstoqueLanches } = useAppData();
+  const { estoque, estoqueLanches, estoqueTabacaria, toast, refreshEstoque, refreshEstoqueLanches, refreshEstoqueTabacaria } = useAppData();
   const [modalOpen, setModalOpen] = useState(false);
   const [produtoAjuste, setProdutoAjuste] = useState(null);
   const [historico, setHistorico] = useState([]);
@@ -53,7 +53,7 @@ export function EstoquePage() {
     try {
       const { data, error } = await supabase
         .from("ajustes_estoque")
-        .select("*, bebida:bebidas(nome), lanche:lanches(nome)")
+        .select("*, bebida:bebidas(nome), lanche:lanches(nome), tabacaria:tabacaria(nome)")
         .order("criado_em", { ascending: false })
         .limit(20);
       if (error) throw error;
@@ -70,6 +70,7 @@ export function EstoquePage() {
     setModalOpen(false);
     refreshEstoque();
     refreshEstoqueLanches();
+    refreshEstoqueTabacaria();
     loadHistorico();
   }
 
@@ -79,6 +80,7 @@ export function EstoquePage() {
 
       <${TabelaEstoque} titulo="Bebidas" itens=${estoque} idField="bebida_id" onAjustar=${(e) => { setProdutoAjuste({ ...e, tipoItem: "bebida" }); setModalOpen(true); }} />
       <${TabelaEstoque} titulo="Lanches" itens=${estoqueLanches} idField="lanche_id" onAjustar=${(e) => { setProdutoAjuste({ ...e, tipoItem: "lanche" }); setModalOpen(true); }} />
+      <${TabelaEstoque} titulo="Tabacaria" itens=${estoqueTabacaria} idField="tabacaria_id" onAjustar=${(e) => { setProdutoAjuste({ ...e, tipoItem: "tabacaria" }); setModalOpen(true); }} />
       <p class="hint">Pizzas são produzidas sob demanda e não entram no controle de estoque. Vendas de combo no delivery baixam automaticamente as bebidas/lanches inclusos.</p>
 
       <div class="card">
@@ -86,7 +88,7 @@ export function EstoquePage() {
         ${loadingHist ? html`<${LoadingState} />` : historico.length === 0 ? html`<${EmptyState}>Nenhum ajuste registrado.<//>` : html`
           ${historico.map((h) => html`
             <div key=${h.id} class="ledger-row">
-              <div><div class="bold" style="font-size:12.5px;">${h.bebida?.nome || h.lanche?.nome}</div><div class="muted-text small">${h.motivo || "Sem motivo informado"} · ${dataHora(h.criado_em)}</div></div>
+              <div><div class="bold" style="font-size:12.5px;">${h.bebida?.nome || h.lanche?.nome || h.tabacaria?.nome}</div><div class="muted-text small">${h.motivo || "Sem motivo informado"} · ${dataHora(h.criado_em)}</div></div>
               <span class=${h.tipo === "entrada" ? "text-green bold" : "text-red bold"}>${h.tipo === "entrada" ? "+" : "-"}${h.quantidade}</span>
             </div>
           `)}
@@ -112,6 +114,7 @@ function AjusteModal({ produto, onClose, onSaved }) {
     try {
       const payload = { tipo, quantidade: Number(quantidade), motivo: motivo || null };
       if (produto.tipoItem === "lanche") payload.lanche_id = produto.lanche_id;
+      else if (produto.tipoItem === "tabacaria") payload.tabacaria_id = produto.tabacaria_id;
       else payload.bebida_id = produto.bebida_id;
       await insertRow("ajustes_estoque", payload);
       toast("Ajuste registrado.", "success");

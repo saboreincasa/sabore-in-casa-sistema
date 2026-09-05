@@ -23,7 +23,7 @@ export function DashboardPage({ setPage }) {
         const [vendasHojeRes, caixaRes, comprasRes, caixaLedgerRes, metaRes] = await Promise.all([
           supabase.from("vendas").select("*").gte("criado_em", `${hoje}T00:00:00`).lt("criado_em", `${amanha}T00:00:00`),
           supabase.from("v_caixa").select("tipo, valor"),
-          supabase.from("compras").select("*, bebida:bebidas(nome, imagem_url), fornecedor:fornecedores(nome)").order("criado_em", { ascending: false }).limit(5),
+          supabase.from("compras").select("*, bebida:bebidas(nome, imagem_url), lanche:lanches(nome, imagem_url), tabacaria:tabacaria(nome, imagem_url), fornecedor:fornecedores(nome)").order("criado_em", { ascending: false }).limit(5),
           supabase.from("v_caixa").select("*").order("criado_em", { ascending: false }).limit(6),
           supabase.from("metas").select("*").eq("tipo", "diaria").eq("referencia", hoje).maybeSingle(),
         ]);
@@ -158,7 +158,7 @@ export function DashboardPage({ setPage }) {
           <div class="row-between section-title"><h3 style="margin:0;font-size:15px;">Últimas Compras</h3><button class="link-btn" onClick=${() => setPage("compras")}>Ver todas</button></div>
           ${ultimasCompras.length === 0 ? html`<${EmptyState}>Nenhuma compra registrada.<//>` : ultimasCompras.map((c) => html`
             <div key=${c.id} class="ledger-row">
-              <div><div class="bold" style="font-size:12.5px;">${c.fornecedor?.nome || "Fornecedor"}</div><div class="muted-text small">${c.bebida?.nome} · ${dataHora(c.criado_em)}</div></div>
+              <div><div class="bold" style="font-size:12.5px;">${c.fornecedor?.nome || "Fornecedor"}</div><div class="muted-text small">${c.bebida?.nome || c.lanche?.nome || c.tabacaria?.nome} · ${dataHora(c.criado_em)}</div></div>
               <span class="text-red bold">${brl(c.custo_unitario * c.quantidade)}</span>
             </div>
           `)}

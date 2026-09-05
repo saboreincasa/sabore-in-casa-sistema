@@ -22,7 +22,7 @@ export function RelatoriosPage() {
     try {
       const ateFim = `${ate}T23:59:59`;
       const [vRes, cRes] = await Promise.all([
-        supabase.from("vendas").select("*, bebida:bebidas(nome), sabor:sabores_pizza(nome), lanche:lanches(nome), combo:combos(nome), canal:canais_venda(nome)").gte("criado_em", `${de}T00:00:00`).lte("criado_em", ateFim),
+        supabase.from("vendas").select("*, bebida:bebidas(nome), sabor:sabores_pizza(nome), lanche:lanches(nome), combo:combos(nome), tabacaria:tabacaria(nome), canal:canais_venda(nome)").gte("criado_em", `${de}T00:00:00`).lte("criado_em", ateFim),
         supabase.from("compras").select("*, fornecedor:fornecedores(nome)").gte("data", de).lte("data", ate),
       ]);
       if (vRes.error) throw vRes.error;
@@ -60,6 +60,7 @@ export function RelatoriosPage() {
       const nome = v.tipo === "pizza" ? `${v.sabor?.nome || "?"} (${v.tamanho})`
         : v.tipo === "lanche" ? v.lanche?.nome || "?"
         : v.tipo === "combo" ? v.combo?.nome || "?"
+        : v.tipo === "tabacaria" ? v.tabacaria?.nome || "?"
         : v.bebida?.nome || "?";
       map[nome] = map[nome] || { nome, qtd: 0, total: 0 };
       map[nome].qtd += Number(v.quantidade);

@@ -14,17 +14,19 @@ function nomeDoItem(v) {
   if (v.tipo === "pizza") return `${v.sabor?.nome || "?"} (${v.tamanho})`;
   if (v.tipo === "lanche") return v.lanche?.nome || "?";
   if (v.tipo === "combo") return v.combo?.nome || "?";
+  if (v.tipo === "tabacaria") return v.tabacaria?.nome || "?";
   return v.bebida?.nome || "?";
 }
 
 export function ComandasPage() {
-  const { toast, isAdmin, canais, refreshEstoque, refreshEstoqueLanches } = useAppData();
+  const { toast, isAdmin, canais, refreshEstoque, refreshEstoqueLanches, refreshEstoqueTabacaria } = useAppData();
   const [comandas, setComandas] = useState([]);
   const [itensPorComanda, setItensPorComanda] = useState({});
   const [loading, setLoading] = useState(true);
   const [novaOpen, setNovaOpen] = useState(false);
   const [ativa, setAtiva] = useState(null);
   const [itemEditando, setItemEditando] = useState(null);
+  const [detalhes, setDetalhes] = useState(null);
   const [fechando, setFechando] = useState(null);
   const [confirm, confirmNode] = useConfirm();
 
@@ -41,7 +43,7 @@ export function ComandasPage() {
 
       const { data: vendasData, error: vErr } = await supabase
         .from("vendas")
-        .select("*, bebida:bebidas(nome), sabor:sabores_pizza(nome), lanche:lanches(nome), combo:combos(nome)")
+        .select("*, bebida:bebidas(nome), sabor:sabores_pizza(nome), lanche:lanches(nome), combo:combos(nome), tabacaria:tabacaria(nome)")
         .not("comanda_id", "is", null)
         .order("criado_em", { ascending: true });
       if (vErr) throw vErr;
@@ -111,6 +113,7 @@ export function ComandasPage() {
     load();
     refreshEstoque();
     refreshEstoqueLanches();
+    refreshEstoqueTabacaria();
   }
 
   function handleExcluirItem(item) {
@@ -143,6 +146,7 @@ export function ComandasPage() {
           load();
           refreshEstoque();
           refreshEstoqueLanches();
+          refreshEstoqueTabacaria();
         } catch (e) {
           toast(`Erro ao excluir: ${e.message}`, "error");
         }
@@ -235,6 +239,7 @@ export function ComandasPage() {
                           </td>
                           <td class="cell-sub">${dataHora(c.fechada_em)}</td>
                           <td class="actions-cell">
+                            <button class="icon-btn" title="Editar comanda" onClick=${() => setDetalhes(c)}>✏️</button>
                             ${isAdmin ? html`<button class="icon-btn" title="Excluir comanda" onClick=${() => handleExcluir(c)}>🗑️</button>` : null}
                           </td>
                         </tr>
@@ -259,6 +264,27 @@ export function ComandasPage() {
         : null}
       ${fechando
         ? html`<${FecharComandaModal} comanda=${fechando} total=${totalDaComanda(fechando.id)} onClose=${() => setFechando(null)} onConfirm=${(fp) => handleFechar(fechando, fp)} />`
+        : null}
+      ${detalhes
+        ? html`<${DetalhesComandaModal}
+            comanda=${comandas.find((c) => c.id === detalhes.id) || detalhes}
+            itens=${itensPorComanda[detalhes.id] || []}
+            total=${totalDaComanda(detalhes.id)}
+            isAdmin=${isAdmin}
+            onClose=${() => setDetalhes(null)}
+            onAddItem=${() => setAtiva(detalhes)}
+            onEditItem=${(v) => setItemEditando({ comanda: detalhes, item: v })}
+            onDeleteItem=${handleExcluirItem}
+            onFormaChange=${async (forma) => {
+              try {
+                await updateRow("comandas", detalhes.id, { forma_pagamento: forma });
+                toast("Forma de pagamento atualizada.", "success");
+                load();
+              } catch (e) {
+                toast(`Erro ao atualizar: ${e.message}`, "error");
+              }
+            }}
+          />`
         : null}
       ${confirmNode}
     </div>
@@ -303,13 +329,15 @@ function NovaComandaModal({ onClose, onSave }) {
 }
 
 function ItemComandaModal({ comanda, canais, editing, onClose, onSaved }) {
-  const { bebidas, sabores, lanches, combos, config, estoque, estoqueLanches, toast } = useAppData();
+  const { bebidas, sabores, lanches, tabacaria, combos, config, estoque, estoqueLanches, estoqueTabacaria, toast } = useAppData();
+  const tabacariaVendavel = tabacaria.filter((t) => t.ativo);
   const [tipo, setTipo] = useState(editing?.tipo || "bebida");
   const [bebidaId, setBebidaId] = useState(editing?.bebida_id || bebidas[0]?.id || "");
   const [saborId, setSaborId] = useState(editing?.sabor_id || sabores[0]?.id || "");
   const [tamanho, setTamanho] = useState(editing?.tamanho || "M");
   const [lancheId, setLancheId] = useState(editing?.lanche_id || lanches[0]?.id || "");
   const [comboId, setComboId] = useState(editing?.combo_id || combos[0]?.id || "");
+  const [tabacariaId, setTabacariaId] = useState(editing?.tabacaria_id || tabacariaVendavel[0]?.id || "");
   const [quantidade, setQuantidade] = useState(editing?.quantidade || 1);
   const [saving, setSaving] = useState(false);
   const [itensAdicionados, setItensAdicionados] = useState([]);
@@ -319,23 +347,27 @@ function ItemComandaModal({ comanda, canais, editing, onClose, onSaved }) {
   const sabor = sabores.find((s) => s.id === saborId);
   const lanche = lanches.find((l) => l.id === lancheId);
   const combo = combos.find((c) => c.id === comboId);
+  const tabacariaItem = tabacaria.find((t) => t.id === tabacariaId);
 
   const custoUnitario =
     tipo === "bebida" ? Number(bebida?.custo || 0)
     : tipo === "pizza" ? Number(sabor?.[`custo_${tamanho.toLowerCase()}`] || 0)
     : tipo === "lanche" ? Number(lanche?.custo || 0)
+    : tipo === "tabacaria" ? Number(tabacariaItem?.custo || 0)
     : 0;
 
   const precoCalc =
     tipo === "combo" ? Number(combo?.preco || 0)
     : tipo === "bebida" ? (canalLocal ? precoBebidaSugerido(bebida, config.margem_recomendada, canalLocal.comissao_pct, canalLocal.taxa_pagamento_pct) : null)
     : tipo === "lanche" ? (canalLocal ? precoBebidaSugerido(lanche, config.margem_recomendada, canalLocal.comissao_pct, canalLocal.taxa_pagamento_pct) : null)
+    : tipo === "tabacaria" ? (tabacariaItem?.preco_fixo != null ? Number(tabacariaItem.preco_fixo) : null)
     : canalLocal ? precoSugerido(custoUnitario, config.margem_recomendada, canalLocal.comissao_pct, canalLocal.taxa_pagamento_pct)
     : null;
 
   const estoqueDisponivel =
     tipo === "bebida" ? Number(estoque.find((e) => e.bebida_id === bebidaId)?.estoque_atual || 0)
     : tipo === "lanche" ? Number(estoqueLanches.find((e) => e.lanche_id === lancheId)?.estoque_atual || 0)
+    : tipo === "tabacaria" ? Number(estoqueTabacaria.find((e) => e.tabacaria_id === tabacariaId)?.estoque_atual || 0)
     : null;
 
   async function handleSubmit(e) {
@@ -344,6 +376,7 @@ function ItemComandaModal({ comanda, canais, editing, onClose, onSaved }) {
     if (tipo === "pizza" && !saborId) { toast("Selecione um sabor.", "error"); return; }
     if (tipo === "lanche" && !lancheId) { toast("Selecione um lanche.", "error"); return; }
     if (tipo === "combo" && !comboId) { toast("Selecione um combo.", "error"); return; }
+    if (tipo === "tabacaria" && !tabacariaId) { toast("Selecione um produto.", "error"); return; }
     if (!quantidade || Number(quantidade) <= 0) { toast("Informe uma quantidade válida.", "error"); return; }
     if (estoqueDisponivel !== null && Number(quantidade) > estoqueDisponivel) {
       toast(`Estoque insuficiente: disponível ${estoqueDisponivel}.`, "error");
@@ -359,6 +392,7 @@ function ItemComandaModal({ comanda, canais, editing, onClose, onSaved }) {
         tamanho: tipo === "pizza" ? tamanho : null,
         lanche_id: tipo === "lanche" ? lancheId : null,
         combo_id: tipo === "combo" ? comboId : null,
+        tabacaria_id: tipo === "tabacaria" ? tabacariaId : null,
         canal_id: canalLocal.id,
         quantidade: Number(quantidade),
         preco_unitario: Number(precoCalc),
@@ -374,7 +408,7 @@ function ItemComandaModal({ comanda, canais, editing, onClose, onSaved }) {
         await insertRow("vendas", payload);
         toast("Item adicionado à comanda.", "success");
         onSaved();
-        setItensAdicionados((prev) => [...prev, { nome: nomeDoItem({ tipo, bebida, sabor, tamanho, lanche, combo }), quantidade: Number(quantidade) }]);
+        setItensAdicionados((prev) => [...prev, { nome: nomeDoItem({ tipo, bebida, sabor, tamanho, lanche, combo, tabacaria: tabacariaItem }), quantidade: Number(quantidade) }]);
         setQuantidade(1);
       }
     } catch (e) {
@@ -392,6 +426,7 @@ function ItemComandaModal({ comanda, canais, editing, onClose, onSaved }) {
           <button type="button" class=${tipo === "pizza" ? "active" : ""} onClick=${() => setTipo("pizza")}>Pizza</button>
           <button type="button" class=${tipo === "lanche" ? "active" : ""} onClick=${() => setTipo("lanche")}>Lanche</button>
           <button type="button" class=${tipo === "combo" ? "active" : ""} onClick=${() => setTipo("combo")}>Combo</button>
+          <button type="button" class=${tipo === "tabacaria" ? "active" : ""} onClick=${() => setTipo("tabacaria")}>Tabacaria</button>
         </div>
 
         ${tipo === "bebida"
@@ -431,13 +466,23 @@ function ItemComandaModal({ comanda, canais, editing, onClose, onSaved }) {
                 ${estoqueDisponivel !== null ? html`<span class="hint">Disponível em estoque: ${estoqueDisponivel}</span>` : null}
               </div>
             `
-          : html`
+          : tipo === "combo"
+          ? html`
               <div class="field">
                 <label>Combo</label>
                 <select class="input" value=${comboId} onChange=${(e) => setComboId(e.target.value)}>
                   ${combos.map((c) => html`<option key=${c.id} value=${c.id}>${c.nome}</option>`)}
                 </select>
                 <span class="hint">Não baixa automaticamente o estoque das bebidas/lanches inclusos — ajuste o Estoque manualmente se for o caso.</span>
+              </div>
+            `
+          : html`
+              <div class="field">
+                <label>Produto (Tabacaria)</label>
+                <select class="input" value=${tabacariaId} onChange=${(e) => setTabacariaId(e.target.value)}>
+                  ${tabacariaVendavel.map((t) => html`<option key=${t.id} value=${t.id}>${t.nome}</option>`)}
+                </select>
+                ${estoqueDisponivel !== null ? html`<span class="hint">Disponível em estoque: ${estoqueDisponivel}</span>` : null}
               </div>
             `}
 
@@ -503,6 +548,77 @@ function FecharComandaModal({ comanda, total, onClose, onConfirm }) {
           <button type="submit" class="btn btn-primary" disabled=${saving}>${saving ? "Fechando…" : "Confirmar pagamento"}</button>
         </div>
       </form>
+    <//>
+  `;
+}
+
+function DetalhesComandaModal({ comanda, itens, total, isAdmin, onClose, onAddItem, onEditItem, onDeleteItem, onFormaChange }) {
+  const [forma, setForma] = useState(comanda.forma_pagamento || "dinheiro");
+  const [savingForma, setSavingForma] = useState(false);
+
+  async function handleSalvarForma() {
+    setSavingForma(true);
+    await onFormaChange(forma);
+    setSavingForma(false);
+  }
+
+  return html`
+    <${Modal} title=${`Comanda — ${comanda.identificador}`} onClose=${onClose}>
+      <div class="stack-4">
+        <div class="row-between">
+          <span class="badge ${comanda.status === "cancelada" ? "badge-red" : "badge-neutral"}">${comanda.status === "cancelada" ? "Cancelada" : "Fechada"}</span>
+          <span class="muted-text small">Fechada ${dataHora(comanda.fechada_em)}</span>
+        </div>
+
+        <div class="card tight" style="background:var(--bg2);">
+          ${itens.length === 0
+            ? html`<span class="muted-text small">Nenhum item.</span>`
+            : html`<ul style="margin:0;padding-left:0;list-style:none;font-size:13px;line-height:1.6;">
+                ${itens.map(
+                  (v) => html`
+                    <li key=${v.id} class="row-between" style="gap:6px;">
+                      <span>${v.quantidade}x ${nomeDoItem(v)} — ${brl(v.preco_unitario * v.quantidade)}</span>
+                      <span style="display:flex;gap:2px;flex-shrink:0;">
+                        <button type="button" class="icon-btn" title="Editar item" onClick=${() => onEditItem(v)}>✏️</button>
+                        ${isAdmin ? html`<button type="button" class="icon-btn" title="Remover item" onClick=${() => onDeleteItem(v)}>🗑️</button>` : null}
+                      </span>
+                    </li>
+                  `
+                )}
+              </ul>`}
+          <div class="row-between" style="margin-top:8px;">
+            <span class="muted-text small">Total</span>
+            <span class="bold text-green">${brl(total)}</span>
+          </div>
+        </div>
+
+        <button type="button" class="btn btn-secondary btn-sm" onClick=${onAddItem}>+ Item</button>
+
+        ${comanda.status !== "cancelada"
+          ? html`
+              <div class="field">
+                <label>Forma de pagamento</label>
+                <div class="row-between" style="gap:8px;">
+                  <div class="pill-toggle" style="flex:1;">
+                    ${FORMAS_PAGAMENTO.map(
+                      (f) => html`<button type="button" key=${f.value} class=${forma === f.value ? "active" : ""} onClick=${() => setForma(f.value)}>${f.label}</button>`
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    disabled=${savingForma || forma === comanda.forma_pagamento}
+                    onClick=${handleSalvarForma}
+                  >${savingForma ? "Salvando…" : "Salvar"}</button>
+                </div>
+              </div>
+            `
+          : null}
+
+        <div class="row-between" style="justify-content:flex-end;">
+          <button type="button" class="btn btn-secondary" onClick=${onClose}>Fechar</button>
+        </div>
+      </div>
     <//>
   `;
 }

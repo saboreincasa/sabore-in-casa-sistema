@@ -9,6 +9,7 @@ function nomeDaVenda(v) {
   if (v.tipo === "pizza") return `${v.sabor?.nome || "?"} (${v.tamanho})`;
   if (v.tipo === "lanche") return v.lanche?.nome || "?";
   if (v.tipo === "combo") return v.combo?.nome || "?";
+  if (v.tipo === "tabacaria") return v.tabacaria?.nome || "?";
   return v.bebida?.nome || "?";
 }
 
@@ -16,6 +17,7 @@ function imgDaVenda(v) {
   if (v.tipo === "pizza") return v.sabor?.imagem_url;
   if (v.tipo === "lanche") return v.lanche?.imagem_url;
   if (v.tipo === "combo") return v.combo?.imagem_url;
+  if (v.tipo === "tabacaria") return v.tabacaria?.imagem_url;
   return v.bebida?.imagem_url;
 }
 
@@ -32,7 +34,7 @@ export function VendasPage() {
     try {
       const { data, error } = await supabase
         .from("vendas")
-        .select("*, bebida:bebidas(nome, imagem_url), sabor:sabores_pizza(nome, imagem_url), lanche:lanches(nome, imagem_url), combo:combos(nome, imagem_url), canal:canais_venda(nome), cliente:clientes(nome)")
+        .select("*, bebida:bebidas(nome, imagem_url), sabor:sabores_pizza(nome, imagem_url), lanche:lanches(nome, imagem_url), combo:combos(nome, imagem_url), tabacaria:tabacaria(nome, imagem_url), canal:canais_venda(nome), cliente:clientes(nome)")
         .order("criado_em", { ascending: false })
         .limit(200);
       if (error) throw error;
@@ -105,13 +107,15 @@ export function VendasPage() {
 }
 
 function VendaModal({ editing, onClose, onSaved }) {
-  const { bebidas, sabores, lanches, combos, canais, clientes, config, estoque, estoqueLanches, toast } = useAppData();
+  const { bebidas, sabores, lanches, tabacaria, combos, canais, clientes, config, estoque, estoqueLanches, estoqueTabacaria, toast } = useAppData();
+  const tabacariaVendavel = tabacaria.filter((t) => t.ativo);
   const [tipo, setTipo] = useState(editing?.tipo || "bebida");
   const [bebidaId, setBebidaId] = useState(editing?.bebida_id || bebidas[0]?.id || "");
   const [saborId, setSaborId] = useState(editing?.sabor_id || sabores[0]?.id || "");
   const [tamanho, setTamanho] = useState(editing?.tamanho || "M");
   const [lancheId, setLancheId] = useState(editing?.lanche_id || lanches[0]?.id || "");
   const [comboId, setComboId] = useState(editing?.combo_id || combos[0]?.id || "");
+  const [tabacariaId, setTabacariaId] = useState(editing?.tabacaria_id || tabacariaVendavel[0]?.id || "");
   const [canalId, setCanalId] = useState(editing?.canal_id || canais[0]?.id || "");
   const [quantidade, setQuantidade] = useState(editing?.quantidade ?? 1);
   const [clienteId, setClienteId] = useState(editing?.cliente_id || "");
@@ -125,15 +129,18 @@ function VendaModal({ editing, onClose, onSaved }) {
   const sabor = sabores.find((s) => s.id === saborId);
   const lanche = lanches.find((l) => l.id === lancheId);
   const combo = combos.find((c) => c.id === comboId);
+  const tabacariaItem = tabacaria.find((t) => t.id === tabacariaId);
 
   const custoUnitario = tipo === "bebida" ? Number(bebida?.custo || 0)
     : tipo === "pizza" ? Number(sabor?.[`custo_${tamanho.toLowerCase()}`] || 0)
     : tipo === "lanche" ? Number(lanche?.custo || 0)
+    : tipo === "tabacaria" ? Number(tabacariaItem?.custo || 0)
     : 0; // combo: custo nao rastreado nas vendas manuais (so o pedido do delivery calcula isso)
 
   const precoSugeridoCalc = tipo === "combo" ? Number(combo?.preco || 0)
     : tipo === "bebida" ? (canal ? precoBebidaSugerido(bebida, config.margem_recomendada, canal.comissao_pct, canal.taxa_pagamento_pct) : null)
     : tipo === "lanche" ? (canal ? precoBebidaSugerido(lanche, config.margem_recomendada, canal.comissao_pct, canal.taxa_pagamento_pct) : null)
+    : tipo === "tabacaria" ? (tabacariaItem?.preco_fixo != null ? Number(tabacariaItem.preco_fixo) : null)
     : canal ? precoSugerido(custoUnitario, config.margem_recomendada, canal.comissao_pct, canal.taxa_pagamento_pct)
     : null;
   const precoFinal = precoManual !== "" ? Number(precoManual) : precoSugeridoCalc;
@@ -149,8 +156,13 @@ function VendaModal({ editing, onClose, onSaved }) {
       const jaContado = editing && editing.tipo === "lanche" && editing.lanche_id === lancheId ? Number(editing.quantidade) : 0;
       return linha ? Number(linha.estoque_atual) + jaContado : 0;
     }
+    if (tipo === "tabacaria") {
+      const linha = estoqueTabacaria.find((e) => e.tabacaria_id === tabacariaId);
+      const jaContado = editing && editing.tipo === "tabacaria" && editing.tabacaria_id === tabacariaId ? Number(editing.quantidade) : 0;
+      return linha ? Number(linha.estoque_atual) + jaContado : 0;
+    }
     return null;
-  }, [tipo, bebidaId, lancheId, estoque, estoqueLanches, editing]);
+  }, [tipo, bebidaId, lancheId, tabacariaId, estoque, estoqueLanches, estoqueTabacaria, editing]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -158,6 +170,7 @@ function VendaModal({ editing, onClose, onSaved }) {
     if (tipo === "pizza" && !saborId) { toast("Selecione um sabor.", "error"); return; }
     if (tipo === "lanche" && !lancheId) { toast("Selecione um lanche.", "error"); return; }
     if (tipo === "combo" && !comboId) { toast("Selecione um combo.", "error"); return; }
+    if (tipo === "tabacaria" && !tabacariaId) { toast("Selecione um produto.", "error"); return; }
     if (!canalId) { toast("Selecione o canal de venda.", "error"); return; }
     if (!quantidade || Number(quantidade) <= 0) { toast("Informe uma quantidade válida.", "error"); return; }
     if (precoFinal === null || precoFinal <= 0) { toast("Não foi possível calcular o preço. Revise a margem em Configurações.", "error"); return; }
@@ -174,6 +187,7 @@ function VendaModal({ editing, onClose, onSaved }) {
         tamanho: tipo === "pizza" ? tamanho : null,
         lanche_id: tipo === "lanche" ? lancheId : null,
         combo_id: tipo === "combo" ? comboId : null,
+        tabacaria_id: tipo === "tabacaria" ? tabacariaId : null,
         canal_id: canalId,
         quantidade: Number(quantidade),
         preco_unitario: Number(precoFinal),
@@ -205,6 +219,7 @@ function VendaModal({ editing, onClose, onSaved }) {
           <button type="button" class=${tipo === "pizza" ? "active" : ""} onClick=${() => setTipo("pizza")}>Pizza</button>
           <button type="button" class=${tipo === "lanche" ? "active" : ""} onClick=${() => setTipo("lanche")}>Lanche</button>
           <button type="button" class=${tipo === "combo" ? "active" : ""} onClick=${() => setTipo("combo")}>Combo</button>
+          <button type="button" class=${tipo === "tabacaria" ? "active" : ""} onClick=${() => setTipo("tabacaria")}>Tabacaria</button>
         </div>
 
         ${tipo === "bebida" ? html`
@@ -238,13 +253,21 @@ function VendaModal({ editing, onClose, onSaved }) {
             </select>
             ${estoqueDisponivel !== null ? html`<span class="hint">Disponível em estoque: ${estoqueDisponivel}</span>` : null}
           </div>
-        ` : html`
+        ` : tipo === "combo" ? html`
           <div class="field">
             <label>Combo</label>
             <select class="input" value=${comboId} onChange=${(e) => setComboId(e.target.value)}>
               ${combos.map((c) => html`<option key=${c.id} value=${c.id}>${c.nome}</option>`)}
             </select>
             <span class="hint">Vendas de combo lançadas aqui não baixam automaticamente o estoque das bebidas/lanches inclusos — ajuste o Estoque manualmente se for o caso. Isso já acontece sozinho quando o combo é vendido pelo site de delivery.</span>
+          </div>
+        ` : html`
+          <div class="field">
+            <label>Produto (Tabacaria)</label>
+            <select class="input" value=${tabacariaId} onChange=${(e) => setTabacariaId(e.target.value)}>
+              ${tabacariaVendavel.map((t) => html`<option key=${t.id} value=${t.id}>${t.nome}</option>`)}
+            </select>
+            ${estoqueDisponivel !== null ? html`<span class="hint">Disponível em estoque: ${estoqueDisponivel}</span>` : null}
           </div>
         `}
 

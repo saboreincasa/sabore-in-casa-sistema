@@ -44,6 +44,7 @@ export function AppDataProvider({ session, profile, children }) {
   const [bebidas, setBebidas] = useState([]);
   const [sabores, setSabores] = useState([]);
   const [lanches, setLanches] = useState([]);
+  const [tabacaria, setTabacaria] = useState([]);
   const [combos, setCombos] = useState([]);
   const [canais, setCanais] = useState([]);
   const [config, setConfig] = useState({ margem_minima: 35, margem_recomendada: 50 });
@@ -51,6 +52,7 @@ export function AppDataProvider({ session, profile, children }) {
   const [fornecedores, setFornecedores] = useState([]);
   const [estoque, setEstoque] = useState([]);
   const [estoqueLanches, setEstoqueLanches] = useState([]);
+  const [estoqueTabacaria, setEstoqueTabacaria] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [toasts, setToasts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -138,6 +140,9 @@ export function AppDataProvider({ session, profile, children }) {
   const refreshLanches = useCallback(async () => {
     setLanches(await fetchAll("lanches", { order: "nome", ascending: true }));
   }, []);
+  const refreshTabacaria = useCallback(async () => {
+    setTabacaria(await fetchAll("tabacaria", { order: "nome", ascending: true }));
+  }, []);
   const refreshCombos = useCallback(async () => {
     setCombos(await fetchAll("combos", { order: "nome", ascending: true }));
   }, []);
@@ -160,6 +165,9 @@ export function AppDataProvider({ session, profile, children }) {
   const refreshEstoqueLanches = useCallback(async () => {
     setEstoqueLanches(await fetchAll("v_estoque_lanches", { order: "nome", ascending: true }));
   }, []);
+  const refreshEstoqueTabacaria = useCallback(async () => {
+    setEstoqueTabacaria(await fetchAll("v_estoque_tabacaria", { order: "nome", ascending: true }));
+  }, []);
   const refreshProfiles = useCallback(async () => {
     setProfiles(await fetchAll("profiles", { order: "criado_em", ascending: true }));
   }, []);
@@ -168,8 +176,8 @@ export function AppDataProvider({ session, profile, children }) {
     setLoading(true);
     try {
       await Promise.all([
-        refreshBebidas(), refreshSabores(), refreshLanches(), refreshCombos(), refreshCanais(), refreshConfig(),
-        refreshClientes(), refreshFornecedores(), refreshEstoque(), refreshEstoqueLanches(), refreshProfiles(),
+        refreshBebidas(), refreshSabores(), refreshLanches(), refreshTabacaria(), refreshCombos(), refreshCanais(), refreshConfig(),
+        refreshClientes(), refreshFornecedores(), refreshEstoque(), refreshEstoqueLanches(), refreshEstoqueTabacaria(), refreshProfiles(),
       ]);
     } catch (e) {
       console.error(e);
@@ -177,15 +185,15 @@ export function AppDataProvider({ session, profile, children }) {
     } finally {
       setLoading(false);
     }
-  }, [refreshBebidas, refreshSabores, refreshLanches, refreshCombos, refreshCanais, refreshConfig, refreshClientes, refreshFornecedores, refreshEstoque, refreshEstoqueLanches, refreshProfiles, toast]);
+  }, [refreshBebidas, refreshSabores, refreshLanches, refreshTabacaria, refreshCombos, refreshCanais, refreshConfig, refreshClientes, refreshFornecedores, refreshEstoque, refreshEstoqueLanches, refreshEstoqueTabacaria, refreshProfiles, toast]);
 
   useEffect(() => { refreshAll(); }, [refreshAll]);
 
   const value = {
     session, profile, isAdmin: profile?.role === "admin",
-    bebidas, sabores, lanches, combos, canais, config, clientes, fornecedores, estoque, estoqueLanches, profiles, loading,
-    refreshBebidas, refreshSabores, refreshLanches, refreshCombos, refreshCanais, refreshConfig, refreshClientes,
-    refreshFornecedores, refreshEstoque, refreshEstoqueLanches, refreshProfiles, refreshAll,
+    bebidas, sabores, lanches, tabacaria, combos, canais, config, clientes, fornecedores, estoque, estoqueLanches, estoqueTabacaria, profiles, loading,
+    refreshBebidas, refreshSabores, refreshLanches, refreshTabacaria, refreshCombos, refreshCanais, refreshConfig, refreshClientes,
+    refreshFornecedores, refreshEstoque, refreshEstoqueLanches, refreshEstoqueTabacaria, refreshProfiles, refreshAll,
     toast,
     podeInstalar: !!promptInstalacao, instalarApp,
     pedidosPrecisandoAtencao, ativarAlertasPedido,
