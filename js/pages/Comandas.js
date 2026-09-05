@@ -24,6 +24,7 @@ export function ComandasPage() {
   const [loading, setLoading] = useState(true);
   const [novaOpen, setNovaOpen] = useState(false);
   const [ativa, setAtiva] = useState(null);
+  const [itemEditando, setItemEditando] = useState(null);
   const [fechando, setFechando] = useState(null);
   const [confirm, confirmNode] = useConfirm();
 
@@ -112,6 +113,22 @@ export function ComandasPage() {
     refreshEstoqueLanches();
   }
 
+  function handleExcluirItem(item) {
+    confirm(
+      `Remover "${nomeDoItem(item)}" da comanda? O item volta pro estoque.`,
+      async () => {
+        try {
+          await deleteRow("vendas", item.id);
+          toast("Item removido.", "success");
+          handleItemSaved();
+        } catch (e) {
+          toast(`Erro ao remover item: ${e.message}`, "error");
+        }
+      },
+      { danger: true, title: "Remover item" }
+    );
+  }
+
   function handleExcluir(comanda) {
     confirm(
       `Excluir a comanda "${comanda.identificador}" e todos os seus itens? Isso apaga o histórico e devolve os itens pro estoque — use só pra testes ou erro de lançamento, não pra desfazer uma venda real.`,
@@ -165,9 +182,17 @@ export function ComandasPage() {
                       <div style="margin:10px 0;">
                         ${(itensPorComanda[c.id] || []).length === 0
                           ? html`<span class="muted-text small">Nenhum item ainda</span>`
-                          : html`<ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.6;">
+                          : html`<ul style="margin:0;padding-left:0;list-style:none;font-size:13px;line-height:1.6;">
                               ${(itensPorComanda[c.id] || []).map(
-                                (v) => html`<li key=${v.id}>${v.quantidade}x ${nomeDoItem(v)} — ${brl(v.preco_unitario * v.quantidade)}</li>`
+                                (v) => html`
+                                  <li key=${v.id} class="row-between" style="gap:6px;">
+                                    <span>${v.quantidade}x ${nomeDoItem(v)} — ${brl(v.preco_unitario * v.quantidade)}</span>
+                                    <span style="display:flex;gap:2px;flex-shrink:0;">
+                                      <button type="button" class="icon-btn" title="Editar item" onClick=${() => setItemEditando({ comanda: c, item: v })}>✏️</button>
+                                      <button type="button" class="icon-btn" title="Remover item" onClick=${() => handleExcluirItem(v)}>🗑️</button>
+                                    </span>
+                                  </li>
+                                `
                               )}
                             </ul>`}
                       </div>
@@ -223,6 +248,15 @@ export function ComandasPage() {
 
       ${novaOpen ? html`<${NovaComandaModal} onClose=${() => setNovaOpen(false)} onSave=${handleAbrir} />` : null}
       ${ativa ? html`<${ItemComandaModal} comanda=${ativa} canais=${canais} onClose=${() => setAtiva(null)} onSaved=${handleItemSaved} />` : null}
+      ${itemEditando
+        ? html`<${ItemComandaModal}
+            comanda=${itemEditando.comanda}
+            canais=${canais}
+            editing=${itemEditando.item}
+            onClose=${() => setItemEditando(null)}
+            onSaved=${handleItemSaved}
+          />`
+        : null}
       ${fechando
         ? html`<${FecharComandaModal} comanda=${fechando} total=${totalDaComanda(fechando.id)} onClose=${() => setFechando(null)} onConfirm=${(fp) => handleFechar(fechando, fp)} />`
         : null}
@@ -268,16 +302,17 @@ function NovaComandaModal({ onClose, onSave }) {
   `;
 }
 
-function ItemComandaModal({ comanda, canais, onClose, onSaved }) {
+function ItemComandaModal({ comanda, canais, editing, onClose, onSaved }) {
   const { bebidas, sabores, lanches, combos, config, estoque, estoqueLanches, toast } = useAppData();
-  const [tipo, setTipo] = useState("bebida");
-  const [bebidaId, setBebidaId] = useState(bebidas[0]?.id || "");
-  const [saborId, setSaborId] = useState(sabores[0]?.id || "");
-  const [tamanho, setTamanho] = useState("M");
-  const [lancheId, setLancheId] = useState(lanches[0]?.id || "");
-  const [comboId, setComboId] = useState(combos[0]?.id || "");
-  const [quantidade, setQuantidade] = useState(1);
+  const [tipo, setTipo] = useState(editing?.tipo || "bebida");
+  const [bebidaId, setBebidaId] = useState(editing?.bebida_id || bebidas[0]?.id || "");
+  const [saborId, setSaborId] = useState(editing?.sabor_id || sabores[0]?.id || "");
+  const [tamanho, setTamanho] = useState(editing?.tamanho || "M");
+  const [lancheId, setLancheId] = useState(editing?.lanche_id || lanches[0]?.id || "");
+  const [comboId, setComboId] = useState(editing?.combo_id || combos[0]?.id || "");
+  const [quantidade, setQuantidade] = useState(editing?.quantidade || 1);
   const [saving, setSaving] = useState(false);
+  const [itensAdicionados, setItensAdicionados] = useState([]);
 
   const canalLocal = canais.find((c) => c.id === "local") || canais[0];
   const bebida = bebidas.find((b) => b.id === bebidaId);
@@ -317,7 +352,7 @@ function ItemComandaModal({ comanda, canais, onClose, onSaved }) {
     if (!precoCalc) { toast("Não foi possível calcular o preço. Revise a margem em Configurações.", "error"); return; }
     setSaving(true);
     try {
-      await insertRow("vendas", {
+      const payload = {
         tipo,
         bebida_id: tipo === "bebida" ? bebidaId : null,
         sabor_id: tipo === "pizza" ? saborId : null,
@@ -329,19 +364,28 @@ function ItemComandaModal({ comanda, canais, onClose, onSaved }) {
         preco_unitario: Number(precoCalc),
         custo_unitario: custoUnitario,
         comanda_id: comanda.id,
-      });
-      toast("Item adicionado à comanda.", "success");
-      onSaved();
-      onClose();
+      };
+      if (editing) {
+        await updateRow("vendas", editing.id, payload);
+        toast("Item atualizado.", "success");
+        onSaved();
+        onClose();
+      } else {
+        await insertRow("vendas", payload);
+        toast("Item adicionado à comanda.", "success");
+        onSaved();
+        setItensAdicionados((prev) => [...prev, { nome: nomeDoItem({ tipo, bebida, sabor, tamanho, lanche, combo }), quantidade: Number(quantidade) }]);
+        setQuantidade(1);
+      }
     } catch (e) {
-      toast(`Erro ao adicionar item: ${e.message}`, "error");
+      toast(`Erro ao salvar item: ${e.message}`, "error");
     } finally {
       setSaving(false);
     }
   }
 
   return html`
-    <${Modal} title=${`Adicionar item — ${comanda.identificador}`} onClose=${onClose}>
+    <${Modal} title=${editing ? `Editar item — ${comanda.identificador}` : `Adicionar item — ${comanda.identificador}`} onClose=${onClose}>
       <form onSubmit=${handleSubmit} class="stack-4">
         <div class="pill-toggle">
           <button type="button" class=${tipo === "bebida" ? "active" : ""} onClick=${() => setTipo("bebida")}>Bebida</button>
@@ -407,9 +451,22 @@ function ItemComandaModal({ comanda, canais, onClose, onSaved }) {
           <div class="row-between"><span class="muted-text small">Total do item</span><span class="bold text-green">${brl((precoCalc || 0) * Number(quantidade || 0))}</span></div>
         </div>
 
+        ${!editing && itensAdicionados.length > 0
+          ? html`
+              <div class="card tight" style="background:var(--bg2);">
+                <div class="muted-text small" style="margin-bottom:4px;">Adicionados agora (${itensAdicionados.length})</div>
+                <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.5;">
+                  ${itensAdicionados.map((it, i) => html`<li key=${i}>${it.quantidade}x ${it.nome}</li>`)}
+                </ul>
+              </div>
+            `
+          : null}
+
         <div class="row-between" style="justify-content:flex-end;gap:8px;">
-          <button type="button" class="btn btn-secondary" onClick=${onClose}>Cancelar</button>
-          <button type="submit" class="btn btn-primary" disabled=${saving}>${saving ? "Adicionando…" : "Adicionar à comanda"}</button>
+          <button type="button" class="btn btn-secondary" onClick=${onClose}>${!editing && itensAdicionados.length > 0 ? "Concluir" : "Cancelar"}</button>
+          <button type="submit" class="btn btn-primary" disabled=${saving}>
+            ${saving ? "Salvando…" : editing ? "Salvar alterações" : "Adicionar e continuar"}
+          </button>
         </div>
       </form>
     <//>
