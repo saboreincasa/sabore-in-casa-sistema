@@ -5,10 +5,11 @@ import { brl, precoBebidaSugerido } from "../format.js";
 import { ImageUploadField } from "../components/ImageUpload.js";
 
 export function LanchesPage() {
-  const { lanches, canais, config, isAdmin, toast, refreshLanches, refreshEstoqueLanches } = useAppData();
+  const { lanches, canais, config, estoqueLanches, isAdmin, toast, refreshLanches, refreshEstoqueLanches } = useAppData();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [confirm, confirmNode] = useConfirm();
+  const estoqueAtualPorId = Object.fromEntries(estoqueLanches.map((e) => [e.lanche_id, e.estoque_atual]));
 
   function handleSaved() {
     setModalOpen(false);
@@ -44,7 +45,7 @@ export function LanchesPage() {
                 <tr>
                   <th>Lanche</th><th>Custo</th>
                   ${canais.map((c) => html`<th key=${c.id}>${c.nome}</th>`)}
-                  <th>Estoque mín.</th><th></th>
+                  <th>Un./caixa</th><th>Em estoque</th><th>Estoque mín.</th><th></th>
                 </tr>
               </thead>
               <tbody>
@@ -58,6 +59,8 @@ export function LanchesPage() {
                     </td>
                     <td>${brl(l.custo)}</td>
                     ${canais.map((c) => html`<td key=${c.id}>${brl(precoBebidaSugerido(l, config.margem_recomendada, c.comissao_pct, c.taxa_pagamento_pct))}</td>`)}
+                    <td>${l.unidades_por_caixa || "—"}</td>
+                    <td>${estoqueAtualPorId[l.id] ?? "—"}</td>
                     <td>${l.estoque_minimo}</td>
                     <td class="actions-cell">
                       ${!l.ativo ? html`<${Badge} tone="neutral">Inativo<//>` : null}
@@ -85,6 +88,7 @@ function LancheModal({ editing, onClose, onSaved }) {
   const { toast } = useAppData();
   const [nome, setNome] = useState(editing?.nome || "");
   const [custo, setCusto] = useState(editing?.custo ?? "");
+  const [unidadesPorCaixa, setUnidadesPorCaixa] = useState(editing?.unidades_por_caixa ?? "");
   const [estoqueMinimo, setEstoqueMinimo] = useState(editing?.estoque_minimo ?? 12);
   const [ativo, setAtivo] = useState(editing?.ativo ?? true);
   const [imagemUrl, setImagemUrl] = useState(editing?.imagem_url || "");
@@ -97,7 +101,7 @@ function LancheModal({ editing, onClose, onSaved }) {
     if (custo === "" || Number(custo) < 0) { toast("Informe o custo.", "error"); return; }
     setSaving(true);
     try {
-      const payload = { nome: nome.trim(), custo: Number(custo), estoque_minimo: Number(estoqueMinimo) || 0, ativo, imagem_url: imagemUrl || null };
+      const payload = { nome: nome.trim(), custo: Number(custo), unidades_por_caixa: unidadesPorCaixa === "" ? null : Number(unidadesPorCaixa), estoque_minimo: Number(estoqueMinimo) || 0, ativo, imagem_url: imagemUrl || null };
       if (editing) {
         await updateRow("lanches", editing.id, payload);
         toast("Lanche atualizado.", "success");
@@ -126,6 +130,12 @@ function LancheModal({ editing, onClose, onSaved }) {
             <label>Custo (R$)</label>
             <input class="input" type="number" min="0" step="0.01" value=${custo} onInput=${(e) => setCusto(e.target.value)} required />
           </div>
+          <div class="field">
+            <label>Unidades por caixa</label>
+            <input class="input" type="number" min="0" step="1" value=${unidadesPorCaixa} onInput=${(e) => setUnidadesPorCaixa(e.target.value)} placeholder="Opcional" />
+          </div>
+        </div>
+        <div class="form-grid cols-2">
           <div class="field">
             <label>Estoque mínimo</label>
             <input class="input" type="number" min="0" step="1" value=${estoqueMinimo} onInput=${(e) => setEstoqueMinimo(e.target.value)} />

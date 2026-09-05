@@ -104,10 +104,23 @@ function CompraModal({ editing, onClose, onSaved }) {
   const [tabacariaId, setTabacariaId] = useState(editing?.tabacaria_id || tabacaria[0]?.id || "");
   const [quantidade, setQuantidade] = useState(editing?.quantidade ?? "");
   const [custoUnitario, setCustoUnitario] = useState(editing?.custo_unitario ?? "");
+  const [numCaixas, setNumCaixas] = useState("");
+  const [valorCaixa, setValorCaixa] = useState("");
   const [fornecedorId, setFornecedorId] = useState(editing?.fornecedor_id || "");
   const [data, setData] = useState(editing?.data || hojeISO());
   const [observacoes, setObservacoes] = useState(editing?.observacoes || "");
   const [saving, setSaving] = useState(false);
+
+  const produtoSelecionado = tipo === "bebida" ? bebidas.find((b) => b.id === bebidaId)
+    : tipo === "lanche" ? lanches.find((l) => l.id === lancheId)
+    : tabacaria.find((t) => t.id === tabacariaId);
+  const unidadesPorCaixa = produtoSelecionado?.unidades_por_caixa ? Number(produtoSelecionado.unidades_por_caixa) : null;
+
+  useEffect(() => {
+    if (!unidadesPorCaixa) return;
+    if (numCaixas !== "") setQuantidade(String(Number(numCaixas) * unidadesPorCaixa));
+    if (valorCaixa !== "") setCustoUnitario((Number(valorCaixa) / unidadesPorCaixa).toFixed(4));
+  }, [numCaixas, valorCaixa, unidadesPorCaixa]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -170,6 +183,16 @@ function CompraModal({ editing, onClose, onSaved }) {
           </select>
         </div>
         `}
+        ${unidadesPorCaixa ? html`
+        <div class="field">
+          <label>Comprado em caixa (opcional) — 1 caixa = ${unidadesPorCaixa} un.</label>
+          <div class="form-grid cols-2">
+            <input class="input" type="number" min="0" step="1" placeholder="Nº de caixas" value=${numCaixas} onInput=${(e) => setNumCaixas(e.target.value)} />
+            <input class="input" type="number" min="0" step="0.01" placeholder="Valor pago pela caixa (R$)" value=${valorCaixa} onInput=${(e) => setValorCaixa(e.target.value)} />
+          </div>
+          <p class="hint" style="margin:4px 0 0;">Preenche quantidade e custo unitário abaixo automaticamente.</p>
+        </div>
+        ` : null}
         <div class="form-grid cols-2">
           <div class="field">
             <label>Quantidade</label>

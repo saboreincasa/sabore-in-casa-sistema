@@ -5,10 +5,11 @@ import { brl } from "../format.js";
 import { ImageUploadField } from "../components/ImageUpload.js";
 
 export function TabacariaPage() {
-  const { tabacaria, isAdmin, toast, refreshTabacaria, refreshEstoqueTabacaria } = useAppData();
+  const { tabacaria, estoqueTabacaria, isAdmin, toast, refreshTabacaria, refreshEstoqueTabacaria } = useAppData();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [confirm, confirmNode] = useConfirm();
+  const estoqueAtualPorId = Object.fromEntries(estoqueTabacaria.map((e) => [e.tabacaria_id, e.estoque_atual]));
 
   function handleSaved() {
     setModalOpen(false);
@@ -40,7 +41,7 @@ export function TabacariaPage() {
         ${tabacaria.length === 0 ? html`<${EmptyState}>Nenhum produto cadastrado.<//>` : html`
           <div class="table-wrap">
             <table class="data-table">
-              <thead><tr><th>Produto</th><th>Custo</th><th>Preço de venda</th><th>Estoque mín.</th><th></th></tr></thead>
+              <thead><tr><th>Produto</th><th>Custo</th><th>Preço de venda</th><th>Un./caixa</th><th>Em estoque</th><th>Estoque mín.</th><th></th></tr></thead>
               <tbody>
                 ${tabacaria.map((t) => html`
                   <tr key=${t.id}>
@@ -52,6 +53,8 @@ export function TabacariaPage() {
                     </td>
                     <td>${brl(t.custo)}</td>
                     <td class="bold">${t.preco_fixo != null ? brl(t.preco_fixo) : "—"}</td>
+                    <td>${t.unidades_por_caixa || "—"}</td>
+                    <td>${estoqueAtualPorId[t.id] ?? "—"}</td>
                     <td>${t.estoque_minimo}</td>
                     <td class="actions-cell">
                       ${!t.ativo ? html`<${Badge} tone="neutral">Inativo<//>` : null}
@@ -80,6 +83,7 @@ function TabacariaModal({ editing, onClose, onSaved }) {
   const [nome, setNome] = useState(editing?.nome || "");
   const [custo, setCusto] = useState(editing?.custo ?? "");
   const [precoFixo, setPrecoFixo] = useState(editing?.preco_fixo ?? "");
+  const [unidadesPorCaixa, setUnidadesPorCaixa] = useState(editing?.unidades_por_caixa ?? "");
   const [estoqueMinimo, setEstoqueMinimo] = useState(editing?.estoque_minimo ?? 0);
   const [ativo, setAtivo] = useState(editing?.ativo ?? true);
   const [imagemUrl, setImagemUrl] = useState(editing?.imagem_url || "");
@@ -97,6 +101,7 @@ function TabacariaModal({ editing, onClose, onSaved }) {
         nome: nome.trim(),
         custo: Number(custo),
         preco_fixo: Number(precoFixo),
+        unidades_por_caixa: unidadesPorCaixa === "" ? null : Number(unidadesPorCaixa),
         estoque_minimo: Number(estoqueMinimo) || 0,
         ativo,
         imagem_url: imagemUrl || null,
@@ -136,16 +141,20 @@ function TabacariaModal({ editing, onClose, onSaved }) {
         </div>
         <div class="form-grid cols-2">
           <div class="field">
+            <label>Unidades por caixa</label>
+            <input class="input" type="number" min="0" step="1" value=${unidadesPorCaixa} onInput=${(e) => setUnidadesPorCaixa(e.target.value)} placeholder="Opcional" />
+          </div>
+          <div class="field">
             <label>Estoque mínimo</label>
             <input class="input" type="number" min="0" step="1" value=${estoqueMinimo} onInput=${(e) => setEstoqueMinimo(e.target.value)} />
           </div>
-          <div class="field">
-            <label>Status</label>
-            <select class="input" value=${ativo ? "1" : "0"} onChange=${(e) => setAtivo(e.target.value === "1")}>
-              <option value="1">Ativo</option>
-              <option value="0">Inativo</option>
-            </select>
-          </div>
+        </div>
+        <div class="field">
+          <label>Status</label>
+          <select class="input" value=${ativo ? "1" : "0"} onChange=${(e) => setAtivo(e.target.value === "1")}>
+            <option value="1">Ativo</option>
+            <option value="0">Inativo</option>
+          </select>
         </div>
         <div class="row-between" style="justify-content:flex-end;gap:8px;">
           <button type="button" class="btn btn-secondary" onClick=${onClose}>Cancelar</button>
