@@ -252,19 +252,6 @@ export function ComandasPage() {
       </div>
 
       ${novaOpen ? html`<${NovaComandaModal} onClose=${() => setNovaOpen(false)} onSave=${handleAbrir} />` : null}
-      ${ativa ? html`<${ItemComandaModal} comanda=${ativa} canais=${canais} onClose=${() => setAtiva(null)} onSaved=${handleItemSaved} />` : null}
-      ${itemEditando
-        ? html`<${ItemComandaModal}
-            comanda=${itemEditando.comanda}
-            canais=${canais}
-            editing=${itemEditando.item}
-            onClose=${() => setItemEditando(null)}
-            onSaved=${handleItemSaved}
-          />`
-        : null}
-      ${fechando
-        ? html`<${FecharComandaModal} comanda=${fechando} total=${totalDaComanda(fechando.id)} onClose=${() => setFechando(null)} onConfirm=${(fp) => handleFechar(fechando, fp)} />`
-        : null}
       ${detalhes
         ? html`<${DetalhesComandaModal}
             comanda=${comandas.find((c) => c.id === detalhes.id) || detalhes}
@@ -285,6 +272,19 @@ export function ComandasPage() {
               }
             }}
           />`
+        : null}
+      ${ativa ? html`<${ItemComandaModal} comanda=${ativa} canais=${canais} onClose=${() => setAtiva(null)} onSaved=${handleItemSaved} />` : null}
+      ${itemEditando
+        ? html`<${ItemComandaModal}
+            comanda=${itemEditando.comanda}
+            canais=${canais}
+            editing=${itemEditando.item}
+            onClose=${() => setItemEditando(null)}
+            onSaved=${handleItemSaved}
+          />`
+        : null}
+      ${fechando
+        ? html`<${FecharComandaModal} comanda=${fechando} total=${totalDaComanda(fechando.id)} onClose=${() => setFechando(null)} onConfirm=${(fp) => handleFechar(fechando, fp)} />`
         : null}
       ${confirmNode}
     </div>
