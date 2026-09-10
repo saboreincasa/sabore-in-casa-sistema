@@ -91,6 +91,7 @@ function ProdutoModal({ editing, onClose, onSaved }) {
   const [embalagem, setEmbalagem] = useState(editing?.embalagem || "");
   const [custo, setCusto] = useState(editing?.custo ?? "");
   const [unidadesPorCaixa, setUnidadesPorCaixa] = useState(editing?.unidades_por_caixa ?? "");
+  const [numCaixasEstoque, setNumCaixasEstoque] = useState("");
   const [estoqueMinimo, setEstoqueMinimo] = useState(editing?.estoque_minimo ?? 12);
   const [ativo, setAtivo] = useState(editing?.ativo ?? true);
   const [imagemUrl, setImagemUrl] = useState(editing?.imagem_url || "");
@@ -104,12 +105,22 @@ function ProdutoModal({ editing, onClose, onSaved }) {
     setSaving(true);
     try {
       const payload = { nome: nome.trim(), embalagem: embalagem || null, custo: Number(custo), unidades_por_caixa: unidadesPorCaixa === "" ? null : Number(unidadesPorCaixa), estoque_minimo: Number(estoqueMinimo) || 0, ativo, imagem_url: imagemUrl || null };
+      let bebidaId = editing?.id;
       if (editing) {
         await updateRow("bebidas", editing.id, payload);
         toast("Produto atualizado.", "success");
       } else {
-        await insertRow("bebidas", payload);
+        const novo = await insertRow("bebidas", payload);
+        bebidaId = novo.id;
         toast("Produto cadastrado.", "success");
+      }
+      if (numCaixasEstoque !== "" && Number(numCaixasEstoque) > 0 && unidadesPorCaixa !== "") {
+        await insertRow("ajustes_estoque", {
+          bebida_id: bebidaId,
+          tipo: "entrada",
+          quantidade: Number(numCaixasEstoque) * Number(unidadesPorCaixa),
+          motivo: `Entrada de ${numCaixasEstoque} caixa(s) via cadastro`,
+        });
       }
       onSaved();
     } catch (e) {
@@ -147,6 +158,13 @@ function ProdutoModal({ editing, onClose, onSaved }) {
             <input class="input" type="number" min="0" step="1" value=${estoqueMinimo} onInput=${(e) => setEstoqueMinimo(e.target.value)} />
           </div>
         </div>
+        ${unidadesPorCaixa !== "" ? html`
+        <div class="field">
+          <label>Quantas caixas tem em estoque</label>
+          <input class="input" type="number" min="0" step="1" value=${numCaixasEstoque} onInput=${(e) => setNumCaixasEstoque(e.target.value)} placeholder="Opcional" />
+        </div>
+        ` : null}
+        ${unidadesPorCaixa !== "" && numCaixasEstoque !== "" ? html`<p class="hint" style="margin:-8px 0 0;">Vai somar ${Number(numCaixasEstoque || 0) * Number(unidadesPorCaixa || 0)} unidades ao estoque atual ao salvar.</p>` : null}
         <div class="field">
           <label>Status</label>
           <select class="input" value=${ativo ? "1" : "0"} onChange=${(e) => setAtivo(e.target.value === "1")}>

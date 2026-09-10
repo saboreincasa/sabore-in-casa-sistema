@@ -84,6 +84,7 @@ function TabacariaModal({ editing, onClose, onSaved }) {
   const [custo, setCusto] = useState(editing?.custo ?? "");
   const [precoFixo, setPrecoFixo] = useState(editing?.preco_fixo ?? "");
   const [unidadesPorCaixa, setUnidadesPorCaixa] = useState(editing?.unidades_por_caixa ?? "");
+  const [numCaixasEstoque, setNumCaixasEstoque] = useState("");
   const [estoqueMinimo, setEstoqueMinimo] = useState(editing?.estoque_minimo ?? 0);
   const [ativo, setAtivo] = useState(editing?.ativo ?? true);
   const [imagemUrl, setImagemUrl] = useState(editing?.imagem_url || "");
@@ -106,12 +107,22 @@ function TabacariaModal({ editing, onClose, onSaved }) {
         ativo,
         imagem_url: imagemUrl || null,
       };
+      let tabacariaId = editing?.id;
       if (editing) {
         await updateRow("tabacaria", editing.id, payload);
         toast("Produto atualizado.", "success");
       } else {
-        await insertRow("tabacaria", payload);
+        const novo = await insertRow("tabacaria", payload);
+        tabacariaId = novo.id;
         toast("Produto cadastrado.", "success");
+      }
+      if (numCaixasEstoque !== "" && Number(numCaixasEstoque) > 0 && unidadesPorCaixa !== "") {
+        await insertRow("ajustes_estoque", {
+          tabacaria_id: tabacariaId,
+          tipo: "entrada",
+          quantidade: Number(numCaixasEstoque) * Number(unidadesPorCaixa),
+          motivo: `Entrada de ${numCaixasEstoque} caixa(s) via cadastro`,
+        });
       }
       onSaved();
     } catch (e) {
@@ -149,6 +160,13 @@ function TabacariaModal({ editing, onClose, onSaved }) {
             <input class="input" type="number" min="0" step="1" value=${estoqueMinimo} onInput=${(e) => setEstoqueMinimo(e.target.value)} />
           </div>
         </div>
+        ${unidadesPorCaixa !== "" ? html`
+        <div class="field">
+          <label>Quantas caixas tem em estoque</label>
+          <input class="input" type="number" min="0" step="1" value=${numCaixasEstoque} onInput=${(e) => setNumCaixasEstoque(e.target.value)} placeholder="Opcional" />
+        </div>
+        ` : null}
+        ${unidadesPorCaixa !== "" && numCaixasEstoque !== "" ? html`<p class="hint" style="margin:-8px 0 0;">Vai somar ${Number(numCaixasEstoque || 0) * Number(unidadesPorCaixa || 0)} unidades ao estoque atual ao salvar.</p>` : null}
         <div class="field">
           <label>Status</label>
           <select class="input" value=${ativo ? "1" : "0"} onChange=${(e) => setAtivo(e.target.value === "1")}>
