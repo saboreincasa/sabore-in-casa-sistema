@@ -7,6 +7,7 @@ import { brl, pct, dataHora, hojeISO, precoSugerido, precoBebidaSugerido, margem
 export function DashboardPage({ setPage }) {
   const { bebidas, sabores, canais, config, estoque, toast } = useAppData();
   const [vendasHoje, setVendasHoje] = useState([]);
+  const [vendasMes, setVendasMes] = useState([]);
   const [caixaTudo, setCaixaTudo] = useState([]);
   const [ultimasCompras, setUltimasCompras] = useState([]);
   const [ultimosCaixa, setUltimosCaixa] = useState([]);
@@ -20,8 +21,10 @@ export function DashboardPage({ setPage }) {
       try {
         const hoje = hojeISO();
         const amanha = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-        const [vendasHojeRes, caixaRes, comprasRes, caixaLedgerRes, metaRes] = await Promise.all([
+        const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+        const [vendasHojeRes, vendasMesRes, caixaRes, comprasRes, caixaLedgerRes, metaRes] = await Promise.all([
           supabase.from("vendas").select("*").gte("criado_em", `${hoje}T00:00:00`).lt("criado_em", `${amanha}T00:00:00`),
+          supabase.from("vendas").select("criado_em, preco_unitario, quantidade").gte("criado_em", `${inicioMes}T00:00:00`).lt("criado_em", `${amanha}T00:00:00`),
           supabase.from("v_caixa").select("tipo, valor"),
           supabase.from("compras").select("*, bebida:bebidas(nome, imagem_url), lanche:lanches(nome, imagem_url), tabacaria:tabacaria(nome, imagem_url), fornecedor:fornecedores(nome)").order("criado_em", { ascending: false }).limit(5),
           supabase.from("v_caixa").select("*").order("criado_em", { ascending: false }).limit(6),
@@ -29,8 +32,10 @@ export function DashboardPage({ setPage }) {
         ]);
         if (cancelled) return;
         if (vendasHojeRes.error) throw vendasHojeRes.error;
+        if (vendasMesRes.error) throw vendasMesRes.error;
         if (caixaRes.error) throw caixaRes.error;
         setVendasHoje(vendasHojeRes.data || []);
+        setVendasMes(vendasMesRes.data || []);
         setCaixaTudo(caixaRes.data || []);
         setUltimasCompras(comprasRes.data || []);
         setUltimosCaixa(caixaLedgerRes.data || []);
@@ -53,6 +58,19 @@ export function DashboardPage({ setPage }) {
   const unidadesEstoque = useMemo(() => estoque.reduce((s, e) => s + Number(e.estoque_atual), 0), [estoque]);
   const estoqueBaixo = useMemo(() => estoque.filter((e) => Number(e.estoque_atual) <= Number(e.estoque_minimo)).sort((a, b) => (a.estoque_atual - a.estoque_minimo) - (b.estoque_atual - b.estoque_minimo)), [estoque]);
   const ticketMedio = vendasHoje.length ? vendasTotalHoje / vendasHoje.length : 0;
+
+  const vendasPorDia = useMemo(() => {
+    const hojeDate = new Date();
+    const dias = Array.from({ length: hojeDate.getDate() }, (_, i) => ({ dia: i + 1, total: 0 }));
+    for (const v of vendasMes) {
+      const dia = new Date(v.criado_em).getDate();
+      if (dias[dia - 1]) dias[dia - 1].total += Number(v.preco_unitario) * Number(v.quantidade);
+    }
+    return dias;
+  }, [vendasMes]);
+  const totalMes = useMemo(() => vendasPorDia.reduce((s, d) => s + d.total, 0), [vendasPorDia]);
+  const maxDia = Math.max(1, ...vendasPorDia.map((d) => d.total));
+  const nomeMes = new Date().toLocaleDateString("pt-BR", { month: "long" });
 
   const resumoProdutos = useMemo(() => {
     const canalLocal = canais.find((c) => c.id === "local");
@@ -141,6 +159,23 @@ export function DashboardPage({ setPage }) {
             <//>
           `}
         </div>
+      </div>
+
+      <div class="card">
+        <div class="row-between section-title">
+          <h3 style="margin:0;font-size:16px;">Vendas do mês (${nomeMes})</h3>
+          <span class="muted-text small">Total: ${brl(totalMes)}</span>
+        </div>
+        ${totalMes === 0 ? html`<${EmptyState}>Sem vendas registradas este mês ainda.<//>` : html`
+          <div style="display:flex;align-items:flex-end;gap:4px;height:150px;padding-top:8px;">
+            ${vendasPorDia.map((d) => html`
+              <div key=${d.dia} title=${`Dia ${d.dia}: ${brl(d.total)}`} style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;">
+                <div style="width:100%;max-width:24px;border-radius:4px 4px 0 0;background:${d.dia === vendasPorDia.length ? "var(--brown)" : "var(--olive)"};height:${Math.max(2, (d.total / maxDia) * 100)}%;"></div>
+                <div class="muted-text" style="font-size:10px;margin-top:4px;">${d.dia}</div>
+              </div>
+            `)}
+          </div>
+        `}
       </div>
 
       <div class="grid-3">
