@@ -48,6 +48,7 @@ export function EstoquePage() {
     refreshEstoque, refreshEstoqueLanches, refreshEstoqueTabacaria, refreshEstoqueInsumos, refreshAnaliseEstoque } = useAppData();
   const [modalOpen, setModalOpen] = useState(false);
   const [produtoAjuste, setProdutoAjuste] = useState(null);
+  const [abaCategoria, setAbaCategoria] = useState("bebida");
   const [historico, setHistorico] = useState([]);
   const [loadingHist, setLoadingHist] = useState(true);
   const [reposicoes, setReposicoes] = useState([]);
@@ -113,19 +114,21 @@ export function EstoquePage() {
       .sort((a, b) => b.mediaDiaria - a.mediaDiaria);
   }, [analiseEstoque]);
 
+  const abas = [
+    { id: "bebida", titulo: "Bebidas", itens: estoque, idField: "bebida_id" },
+    { id: "lanche", titulo: "Lanches", itens: estoqueLanches, idField: "lanche_id" },
+    { id: "tabacaria", titulo: "Tabacaria", itens: estoqueTabacaria, idField: "tabacaria_id" },
+    { id: "insumo", titulo: "Insumos (pizza)", itens: estoqueInsumos, idField: "insumo_id" },
+  ];
+  const abaAtiva = abas.find((a) => a.id === abaCategoria) || abas[0];
+
   return html`
     <div class="stack-6">
-      <div><h1 class="h2" style="font-size:26px;">Estoque</h1><p class="muted-text" style="margin:4px 0 0;">Níveis atuais e ajustes manuais (perdas, quebras, contagens).</p></div>
-
-      <${TabelaEstoque} titulo="Bebidas" itens=${estoque} idField="bebida_id" onAjustar=${(e) => { setProdutoAjuste({ ...e, tipoItem: "bebida" }); setModalOpen(true); }} />
-      <${TabelaEstoque} titulo="Lanches" itens=${estoqueLanches} idField="lanche_id" onAjustar=${(e) => { setProdutoAjuste({ ...e, tipoItem: "lanche" }); setModalOpen(true); }} />
-      <${TabelaEstoque} titulo="Tabacaria" itens=${estoqueTabacaria} idField="tabacaria_id" onAjustar=${(e) => { setProdutoAjuste({ ...e, tipoItem: "tabacaria" }); setModalOpen(true); }} />
-      <${TabelaEstoque} titulo="Insumos (pizza)" itens=${estoqueInsumos} idField="insumo_id" onAjustar=${(e) => { setProdutoAjuste({ ...e, tipoItem: "insumo" }); setModalOpen(true); }} />
-      <p class="hint">Pizzas são produzidas sob demanda e não entram no controle de estoque. Vendas de combo no delivery baixam automaticamente as bebidas/lanches inclusos.</p>
+      <div><h1 class="h2" style="font-size:26px;">Estoque</h1><p class="muted-text" style="margin:4px 0 0;">Reposições, níveis atuais e ajustes manuais (perdas, quebras, contagens).</p></div>
 
       <div class="card">
         <h3 style="margin:0 0 4px;font-size:16px;">Histórico de reposição</h3>
-        <p class="muted-text small" style="margin:0 0 16px;">Cada compra registrada, com o estoque antes e depois da entrada — para reconstruir exatamente como chegamos ao saldo atual.</p>
+        <p class="muted-text small" style="margin:0 0 16px;">Cada compra registrada, com o estoque antes e depois da entrada — para reconstruir exatamente como chegamos ao saldo atual. As mais recentes aparecem primeiro.</p>
         ${loadingRepos ? html`<${LoadingState} />` : reposicoes.length === 0 ? html`<${EmptyState}>Nenhuma reposição registrada ainda.<//>` : html`
           <div class="table-wrap">
             <table class="data-table">
@@ -174,6 +177,14 @@ export function EstoquePage() {
             </table>
           </div>
         `}
+      </div>
+
+      <div>
+        <div class="pill-toggle" style="margin-bottom:12px;">
+          ${abas.map((a) => html`<button key=${a.id} type="button" class=${a.id === abaCategoria ? "active" : ""} onClick=${() => setAbaCategoria(a.id)}>${a.titulo}</button>`)}
+        </div>
+        <${TabelaEstoque} titulo=${`Níveis atuais — ${abaAtiva.titulo}`} itens=${abaAtiva.itens} idField=${abaAtiva.idField} onAjustar=${(e) => { setProdutoAjuste({ ...e, tipoItem: abaAtiva.id }); setModalOpen(true); }} />
+        <p class="hint">Pizzas são produzidas sob demanda e não entram no controle de estoque. Vendas de combo no delivery baixam automaticamente as bebidas/lanches inclusos.</p>
       </div>
 
       <div class="card">
