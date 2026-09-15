@@ -59,7 +59,7 @@ export function EstoquePage() {
     try {
       const { data, error } = await supabase
         .from("ajustes_estoque")
-        .select("*, bebida:bebidas(nome), lanche:lanches(nome), tabacaria:tabacaria(nome)")
+        .select("*, bebida:bebidas(nome), lanche:lanches(nome), tabacaria:tabacaria(nome), insumo:insumos_pizza(nome)")
         .order("criado_em", { ascending: false })
         .limit(20);
       if (error) throw error;
@@ -76,7 +76,7 @@ export function EstoquePage() {
     try {
       const { data, error } = await supabase
         .from("movimentacoes_estoque")
-        .select("*, bebida:bebidas(nome), lanche:lanches(nome), tabacaria:tabacaria(nome), insumo:insumos_pizza(nome), fornecedor:fornecedores(nome)")
+        .select("*, bebida:bebidas(nome), lanche:lanches(nome), tabacaria:tabacaria(nome), insumo:insumos_pizza(nome), fornecedor:fornecedores(nome), responsavel:profiles(nome)")
         .eq("origem", "compra")
         .order("criado_em", { ascending: false })
         .limit(30);
@@ -132,7 +132,7 @@ export function EstoquePage() {
         ${loadingRepos ? html`<${LoadingState} />` : reposicoes.length === 0 ? html`<${EmptyState}>Nenhuma reposição registrada ainda.<//>` : html`
           <div class="table-wrap">
             <table class="data-table">
-              <thead><tr><th>Data</th><th>Produto</th><th>Antes</th><th>Entrada</th><th>Depois</th><th>Fornecedor</th><th>Custo total</th><th>Obs.</th></tr></thead>
+              <thead><tr><th>Data</th><th>Produto</th><th>Antes</th><th>Entrada</th><th>Depois</th><th>Fornecedor</th><th>Custo total</th><th>Responsável</th><th>Obs.</th></tr></thead>
               <tbody>
                 ${reposicoes.map((r) => html`
                   <tr key=${r.id}>
@@ -143,6 +143,7 @@ export function EstoquePage() {
                     <td class="bold">${r.estoque_depois}</td>
                     <td class="cell-sub">${r.fornecedor?.nome || "—"}</td>
                     <td>${r.custo_unitario != null ? brl(r.custo_unitario * r.quantidade) : "—"}</td>
+                    <td class="cell-sub">${r.responsavel?.nome || "—"}</td>
                     <td class="cell-sub">${r.observacoes || "—"}</td>
                   </tr>
                 `)}
@@ -192,7 +193,7 @@ export function EstoquePage() {
         ${loadingHist ? html`<${LoadingState} />` : historico.length === 0 ? html`<${EmptyState}>Nenhum ajuste registrado.<//>` : html`
           ${historico.map((h) => html`
             <div key=${h.id} class="ledger-row">
-              <div><div class="bold" style="font-size:12.5px;">${h.bebida?.nome || h.lanche?.nome || h.tabacaria?.nome}</div><div class="muted-text small">${h.motivo || "Sem motivo informado"} · ${dataHora(h.criado_em)}</div></div>
+              <div><div class="bold" style="font-size:12.5px;">${h.bebida?.nome || h.lanche?.nome || h.tabacaria?.nome || h.insumo?.nome}</div><div class="muted-text small">${h.motivo || "Sem motivo informado"} · ${dataHora(h.criado_em)}</div></div>
               <span class=${h.tipo === "entrada" ? "text-green bold" : "text-red bold"}>${h.tipo === "entrada" ? "+" : "-"}${h.quantidade}</span>
             </div>
           `)}
