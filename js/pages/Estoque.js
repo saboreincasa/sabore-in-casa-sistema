@@ -2,7 +2,7 @@ import { html, useState, useEffect, useMemo } from "../lib.js";
 import { supabase } from "../supabaseClient.js";
 import { useAppData, insertRow } from "../store.js";
 import { Modal, Badge, ImgThumb, EmptyState, LoadingState } from "../components/ui.js";
-import { dataHora, dataCurta, brl } from "../format.js";
+import { dataHora, dataCurta, brl, hojeISO } from "../format.js";
 
 const NOME_TIPO = { bebida: "Bebida", lanche: "Lanche", tabacaria: "Tabacaria", insumo: "Insumo" };
 
@@ -53,6 +53,9 @@ export function EstoquePage() {
   const [loadingHist, setLoadingHist] = useState(true);
   const [reposicoes, setReposicoes] = useState([]);
   const [loadingRepos, setLoadingRepos] = useState(true);
+  const [filtroProduto, setFiltroProduto] = useState("");
+  const [filtroDe, setFiltroDe] = useState("");
+  const [filtroAte, setFiltroAte] = useState("");
 
   async function loadHistorico() {
     setLoadingHist(true);
@@ -74,14 +77,23 @@ export function EstoquePage() {
   async function loadReposicoes() {
     setLoadingRepos(true);
     try {
-      const { data, error } = await supabase
+      const temFiltro = !!(filtroProduto || filtroDe || filtroAte);
+      let q = supabase
         .from("movimentacoes_estoque")
-        .select("*, bebida:bebidas(nome), lanche:lanches(nome), tabacaria:tabacaria(nome), insumo:insumos_pizza(nome), fornecedor:fornecedores(nome), responsavel:profiles(nome)")
+        .select("*, bebida:bebidas(nome, unidades_por_caixa), lanche:lanches(nome, unidades_por_caixa), tabacaria:tabacaria(nome, unidades_por_caixa), insumo:insumos_pizza(nome), fornecedor:fornecedores(nome), responsavel:profiles(nome)")
         .eq("origem", "compra")
         .order("criado_em", { ascending: false })
-        .limit(30);
+        .limit(temFiltro ? 500 : 30);
+      if (filtroDe) q = q.gte("criado_em", `${filtroDe}T00:00:00`);
+      if (filtroAte) q = q.lte("criado_em", `${filtroAte}T23:59:59`);
+      const { data, error } = await q;
       if (error) throw error;
-      setReposicoes(data || []);
+      let rows = data || [];
+      if (filtroProduto) {
+        const [tipo, id] = filtroProduto.split(":");
+        rows = rows.filter((r) => r.tipo_produto === tipo && (r.bebida_id || r.lanche_id || r.tabacaria_id || r.insumo_id) === id);
+      }
+      setReposicoes(rows);
     } catch (e) {
       toast(`Erro ao carregar histórico de reposição: ${e.message}`, "error");
     } finally {
@@ -89,7 +101,8 @@ export function EstoquePage() {
     }
   }
 
-  useEffect(() => { loadHistorico(); loadReposicoes(); }, []);
+  useEffect(() => { loadHistorico(); }, []);
+  useEffect(() => { loadReposicoes(); }, [filtroProduto, filtroDe, filtroAte]);
 
   function handleSaved() {
     setModalOpen(false);
@@ -127,26 +140,43 @@ export function EstoquePage() {
       <div><h1 class="h2" style="font-size:26px;">Estoque</h1><p class="muted-text" style="margin:4px 0 0;">Reposições, níveis atuais e ajustes manuais (perdas, quebras, contagens).</p></div>
 
       <div class="card">
-        <h3 style="margin:0 0 4px;font-size:16px;">Histórico de reposição</h3>
-        <p class="muted-text small" style="margin:0 0 16px;">Cada compra registrada, com o estoque antes e depois da entrada — para reconstruir exatamente como chegamos ao saldo atual. As mais recentes aparecem primeiro.</p>
-        ${loadingRepos ? html`<${LoadingState} />` : reposicoes.length === 0 ? html`<${EmptyState}>Nenhuma reposição registrada ainda.<//>` : html`
+        <div class="row-between" style="flex-wrap:wrap;gap:12px;">
+          <div><h3 style="margin:0 0 4px;font-size:16px;">Histórico de reposição</h3>
+          <p class="muted-text small" style="margin:0;">Cada compra registrada, com o estoque antes e depois da entrada — para reconstruir exatamente como chegamos ao saldo atual. As mais recentes aparecem primeiro.</p></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <select class="input" value=${filtroProduto} onChange=${(e) => setFiltroProduto(e.target.value)}>
+              <option value="">Todos os produtos</option>
+              ${[...analiseEstoque].sort((a, b) => a.nome.localeCompare(b.nome)).map((p) => html`<option key=${`${p.tipo_produto}:${p.produto_id}`} value=${`${p.tipo_produto}:${p.produto_id}`}>${p.nome}</option>`)}
+            </select>
+            <input class="input" type="date" value=${filtroDe} onInput=${(e) => setFiltroDe(e.target.value)} />
+            <span class="muted-text small">até</span>
+            <input class="input" type="date" value=${filtroAte} onInput=${(e) => setFiltroAte(e.target.value)} />
+            ${(filtroProduto || filtroDe || filtroAte) ? html`<button type="button" class="btn btn-secondary btn-sm" onClick=${() => { setFiltroProduto(""); setFiltroDe(""); setFiltroAte(""); }}>Limpar</button>` : null}
+          </div>
+        </div>
+        <div style="height:16px;"></div>
+        ${loadingRepos ? html`<${LoadingState} />` : reposicoes.length === 0 ? html`<${EmptyState}>Nenhuma reposição encontrada.<//>` : html`
           <div class="table-wrap">
             <table class="data-table">
               <thead><tr><th>Data</th><th>Produto</th><th>Antes</th><th>Entrada</th><th>Depois</th><th>Fornecedor</th><th>Custo total</th><th>Responsável</th><th>Obs.</th></tr></thead>
               <tbody>
-                ${reposicoes.map((r) => html`
+                ${reposicoes.map((r) => {
+                  const upc = r.bebida?.unidades_por_caixa || r.lanche?.unidades_por_caixa || r.tabacaria?.unidades_por_caixa || null;
+                  const qtd = Number(r.quantidade);
+                  const emCaixas = upc && qtd % Number(upc) === 0 ? `${qtd} un (${qtd / Number(upc)} cx)` : `${qtd}`;
+                  return html`
                   <tr key=${r.id}>
                     <td class="cell-sub">${dataHora(r.criado_em)}</td>
                     <td class="cell-title">${r.bebida?.nome || r.lanche?.nome || r.tabacaria?.nome || r.insumo?.nome}</td>
                     <td>${r.estoque_antes}</td>
-                    <td class="text-green bold">+${r.quantidade}</td>
+                    <td class="text-green bold">+${emCaixas}</td>
                     <td class="bold">${r.estoque_depois}</td>
                     <td class="cell-sub">${r.fornecedor?.nome || "—"}</td>
                     <td>${r.custo_unitario != null ? brl(r.custo_unitario * r.quantidade) : "—"}</td>
                     <td class="cell-sub">${r.responsavel?.nome || "—"}</td>
                     <td class="cell-sub">${r.observacoes || "—"}</td>
                   </tr>
-                `)}
+                `;})}
               </tbody>
             </table>
           </div>
@@ -159,21 +189,26 @@ export function EstoquePage() {
         ${media.length === 0 ? html`<${EmptyState}>Sem dados suficientes ainda.<//>` : html`
           <div class="table-wrap">
             <table class="data-table">
-              <thead><tr><th>Produto</th><th>Tipo</th><th>Comprado</th><th>Vendido</th><th>Estoque atual</th><th>Média/dia</th><th>Média/semana</th><th>Dias p/ acabar</th><th>Última reposição</th></tr></thead>
+              <thead><tr><th>Produto</th><th>Tipo</th><th>Status</th><th>Comprado</th><th>Vendido</th><th>Estoque atual</th><th>Média/dia</th><th>Média/semana</th><th>Dias p/ acabar</th><th>Última reposição</th></tr></thead>
               <tbody>
-                ${media.map((p) => html`
+                ${media.map((p) => {
+                  const semVendas = Number(p.total_vendido) === 0;
+                  const repoLogo = !semVendas && p.diasParaAcabar !== null && p.diasParaAcabar < 7;
+                  const status = semVendas ? { tone: "neutral", label: "Sem vendas" } : repoLogo ? { tone: "red", label: "Repor logo" } : { tone: "green", label: "OK" };
+                  return html`
                   <tr key=${`${p.tipo_produto}-${p.produto_id}`}>
                     <td class="cell-title">${p.nome}</td>
                     <td><span class="badge badge-neutral">${NOME_TIPO[p.tipo_produto]}</span></td>
+                    <td><${Badge} tone=${status.tone}>${status.label}<//></td>
                     <td>${Number(p.total_comprado)}</td>
                     <td>${Number(p.total_vendido)}</td>
                     <td class="bold">${Number(p.estoque_atual)}</td>
                     <td>${p.mediaDiaria.toFixed(2)}</td>
                     <td>${(p.mediaDiaria * 7).toFixed(1)}</td>
-                    <td class=${p.diasParaAcabar !== null && p.diasParaAcabar < 7 ? "text-red bold" : ""}>${p.diasParaAcabar !== null ? Math.round(p.diasParaAcabar) : "—"}</td>
+                    <td class=${repoLogo ? "text-red bold" : ""}>${p.diasParaAcabar !== null ? Math.round(p.diasParaAcabar) : "—"}</td>
                     <td class="cell-sub">${p.ultima_reposicao_em ? dataCurta(p.ultima_reposicao_em) : "—"}</td>
                   </tr>
-                `)}
+                `;})}
               </tbody>
             </table>
           </div>
