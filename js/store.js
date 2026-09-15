@@ -45,6 +45,7 @@ export function AppDataProvider({ session, profile, children }) {
   const [sabores, setSabores] = useState([]);
   const [lanches, setLanches] = useState([]);
   const [tabacaria, setTabacaria] = useState([]);
+  const [insumos, setInsumos] = useState([]);
   const [combos, setCombos] = useState([]);
   const [canais, setCanais] = useState([]);
   const [config, setConfig] = useState({ margem_minima: 35, margem_recomendada: 50 });
@@ -53,6 +54,8 @@ export function AppDataProvider({ session, profile, children }) {
   const [estoque, setEstoque] = useState([]);
   const [estoqueLanches, setEstoqueLanches] = useState([]);
   const [estoqueTabacaria, setEstoqueTabacaria] = useState([]);
+  const [estoqueInsumos, setEstoqueInsumos] = useState([]);
+  const [analiseEstoque, setAnaliseEstoque] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [toasts, setToasts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -143,6 +146,9 @@ export function AppDataProvider({ session, profile, children }) {
   const refreshTabacaria = useCallback(async () => {
     setTabacaria(await fetchAll("tabacaria", { order: "nome", ascending: true }));
   }, []);
+  const refreshInsumos = useCallback(async () => {
+    setInsumos(await fetchAll("insumos_pizza", { order: "nome", ascending: true }));
+  }, []);
   const refreshCombos = useCallback(async () => {
     setCombos(await fetchAll("combos", { order: "nome", ascending: true }));
   }, []);
@@ -168,6 +174,12 @@ export function AppDataProvider({ session, profile, children }) {
   const refreshEstoqueTabacaria = useCallback(async () => {
     setEstoqueTabacaria(await fetchAll("v_estoque_tabacaria", { order: "nome", ascending: true }));
   }, []);
+  const refreshEstoqueInsumos = useCallback(async () => {
+    setEstoqueInsumos(await fetchAll("v_estoque_insumos", { order: "nome", ascending: true }));
+  }, []);
+  const refreshAnaliseEstoque = useCallback(async () => {
+    setAnaliseEstoque(await fetchAll("v_analise_estoque", { order: "nome", ascending: true }));
+  }, []);
   const refreshProfiles = useCallback(async () => {
     setProfiles(await fetchAll("profiles", { order: "criado_em", ascending: true }));
   }, []);
@@ -176,8 +188,8 @@ export function AppDataProvider({ session, profile, children }) {
     setLoading(true);
     try {
       await Promise.all([
-        refreshBebidas(), refreshSabores(), refreshLanches(), refreshTabacaria(), refreshCombos(), refreshCanais(), refreshConfig(),
-        refreshClientes(), refreshFornecedores(), refreshEstoque(), refreshEstoqueLanches(), refreshEstoqueTabacaria(), refreshProfiles(),
+        refreshBebidas(), refreshSabores(), refreshLanches(), refreshTabacaria(), refreshInsumos(), refreshCombos(), refreshCanais(), refreshConfig(),
+        refreshClientes(), refreshFornecedores(), refreshEstoque(), refreshEstoqueLanches(), refreshEstoqueTabacaria(), refreshEstoqueInsumos(), refreshAnaliseEstoque(), refreshProfiles(),
       ]);
     } catch (e) {
       console.error(e);
@@ -185,15 +197,15 @@ export function AppDataProvider({ session, profile, children }) {
     } finally {
       setLoading(false);
     }
-  }, [refreshBebidas, refreshSabores, refreshLanches, refreshTabacaria, refreshCombos, refreshCanais, refreshConfig, refreshClientes, refreshFornecedores, refreshEstoque, refreshEstoqueLanches, refreshEstoqueTabacaria, refreshProfiles, toast]);
+  }, [refreshBebidas, refreshSabores, refreshLanches, refreshTabacaria, refreshInsumos, refreshCombos, refreshCanais, refreshConfig, refreshClientes, refreshFornecedores, refreshEstoque, refreshEstoqueLanches, refreshEstoqueTabacaria, refreshEstoqueInsumos, refreshAnaliseEstoque, refreshProfiles, toast]);
 
   useEffect(() => { refreshAll(); }, [refreshAll]);
 
   const value = {
     session, profile, isAdmin: profile?.role === "admin",
-    bebidas, sabores, lanches, tabacaria, combos, canais, config, clientes, fornecedores, estoque, estoqueLanches, estoqueTabacaria, profiles, loading,
-    refreshBebidas, refreshSabores, refreshLanches, refreshTabacaria, refreshCombos, refreshCanais, refreshConfig, refreshClientes,
-    refreshFornecedores, refreshEstoque, refreshEstoqueLanches, refreshEstoqueTabacaria, refreshProfiles, refreshAll,
+    bebidas, sabores, lanches, tabacaria, insumos, combos, canais, config, clientes, fornecedores, estoque, estoqueLanches, estoqueTabacaria, estoqueInsumos, analiseEstoque, profiles, loading,
+    refreshBebidas, refreshSabores, refreshLanches, refreshTabacaria, refreshInsumos, refreshCombos, refreshCanais, refreshConfig, refreshClientes,
+    refreshFornecedores, refreshEstoque, refreshEstoqueLanches, refreshEstoqueTabacaria, refreshEstoqueInsumos, refreshAnaliseEstoque, refreshProfiles, refreshAll,
     toast,
     podeInstalar: !!promptInstalacao, instalarApp,
     pedidosPrecisandoAtencao, ativarAlertasPedido,

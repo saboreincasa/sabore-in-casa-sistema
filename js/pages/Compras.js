@@ -5,7 +5,7 @@ import { Modal, useConfirm, LoadingState, EmptyState, ImgThumb } from "../compon
 import { brl, dataCurta, dataHora, hojeISO } from "../format.js";
 
 export function ComprasPage() {
-  const { bebidas, lanches, tabacaria, fornecedores, toast, isAdmin, refreshEstoque, refreshEstoqueLanches, refreshEstoqueTabacaria } = useAppData();
+  const { bebidas, lanches, tabacaria, insumos, fornecedores, toast, isAdmin, refreshEstoque, refreshEstoqueLanches, refreshEstoqueTabacaria, refreshEstoqueInsumos, refreshAnaliseEstoque } = useAppData();
   const [compras, setCompras] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -17,7 +17,7 @@ export function ComprasPage() {
     try {
       const { data, error } = await supabase
         .from("compras")
-        .select("*, bebida:bebidas(nome, imagem_url, embalagem), lanche:lanches(nome, imagem_url), tabacaria:tabacaria(nome, imagem_url), fornecedor:fornecedores(nome)")
+        .select("*, bebida:bebidas(nome, imagem_url, embalagem), lanche:lanches(nome, imagem_url), tabacaria:tabacaria(nome, imagem_url), insumo:insumos_pizza(nome, imagem_url, unidade), fornecedor:fornecedores(nome)")
         .order("criado_em", { ascending: false })
         .limit(200);
       if (error) throw error;
@@ -36,10 +36,12 @@ export function ComprasPage() {
     refreshEstoque();
     refreshEstoqueLanches();
     refreshEstoqueTabacaria();
+    refreshEstoqueInsumos();
+    refreshAnaliseEstoque();
   }
 
   function handleDelete(row) {
-    const nome = row.bebida?.nome || row.lanche?.nome || row.tabacaria?.nome;
+    const nome = row.bebida?.nome || row.lanche?.nome || row.tabacaria?.nome || row.insumo?.nome;
     confirm(`Excluir a compra de "${nome}"? O estoque será ajustado automaticamente.`, async () => {
       try {
         await deleteRow("compras", row.id);
@@ -48,6 +50,8 @@ export function ComprasPage() {
         refreshEstoque();
         refreshEstoqueLanches();
         refreshEstoqueTabacaria();
+        refreshEstoqueInsumos();
+        refreshAnaliseEstoque();
       } catch (e) {
         toast(`Erro ao excluir: ${e.message}`, "error");
       }
@@ -58,7 +62,7 @@ export function ComprasPage() {
     <div class="stack-6">
       <div class="row-between">
         <div><h1 class="h2" style="font-size:26px;">Compras</h1><p class="muted-text" style="margin:4px 0 0;">Registre entradas de insumos e reponha o estoque.</p></div>
-        <button class="btn btn-primary" disabled=${bebidas.length === 0 && lanches.length === 0 && tabacaria.length === 0} onClick=${() => { setEditing(null); setModalOpen(true); }}>+ Registrar Compra</button>
+        <button class="btn btn-primary" disabled=${bebidas.length === 0 && lanches.length === 0 && tabacaria.length === 0 && insumos.length === 0} onClick=${() => { setEditing(null); setModalOpen(true); }}>+ Registrar Compra</button>
       </div>
 
       <div class="card">
@@ -69,7 +73,7 @@ export function ComprasPage() {
               <thead><tr><th>Produto</th><th>Fornecedor</th><th>Qtd.</th><th>Custo Unit.</th><th>Total</th><th>Data</th><th></th></tr></thead>
               <tbody>
                 ${compras.map((c) => {
-                  const item = c.bebida || c.lanche || c.tabacaria;
+                  const item = c.bebida || c.lanche || c.tabacaria || c.insumo;
                   return html`
                   <tr key=${c.id}>
                     <td><div class="cell-product"><${ImgThumb} src=${item?.imagem_url} alt=${item?.nome} /><div><div class="cell-title">${item?.nome}</div><div class="cell-sub">${c.bebida?.embalagem || ""}</div></div></div></td>
@@ -97,11 +101,12 @@ export function ComprasPage() {
 }
 
 function CompraModal({ editing, onClose, onSaved }) {
-  const { bebidas, lanches, tabacaria, fornecedores, toast } = useAppData();
-  const [tipo, setTipo] = useState(editing?.lanche_id ? "lanche" : editing?.tabacaria_id ? "tabacaria" : "bebida");
+  const { bebidas, lanches, tabacaria, insumos, fornecedores, toast } = useAppData();
+  const [tipo, setTipo] = useState(editing?.lanche_id ? "lanche" : editing?.tabacaria_id ? "tabacaria" : editing?.insumo_id ? "insumo" : "bebida");
   const [bebidaId, setBebidaId] = useState(editing?.bebida_id || bebidas[0]?.id || "");
   const [lancheId, setLancheId] = useState(editing?.lanche_id || lanches[0]?.id || "");
   const [tabacariaId, setTabacariaId] = useState(editing?.tabacaria_id || tabacaria[0]?.id || "");
+  const [insumoId, setInsumoId] = useState(editing?.insumo_id || insumos[0]?.id || "");
   const [quantidade, setQuantidade] = useState(editing?.quantidade ?? "");
   const [custoUnitario, setCustoUnitario] = useState(editing?.custo_unitario ?? "");
   const [numCaixas, setNumCaixas] = useState("");
@@ -113,7 +118,8 @@ function CompraModal({ editing, onClose, onSaved }) {
 
   const produtoSelecionado = tipo === "bebida" ? bebidas.find((b) => b.id === bebidaId)
     : tipo === "lanche" ? lanches.find((l) => l.id === lancheId)
-    : tabacaria.find((t) => t.id === tabacariaId);
+    : tipo === "tabacaria" ? tabacaria.find((t) => t.id === tabacariaId)
+    : insumos.find((i) => i.id === insumoId);
   const unidadesPorCaixa = produtoSelecionado?.unidades_por_caixa ? Number(produtoSelecionado.unidades_por_caixa) : null;
 
   useEffect(() => {
@@ -127,6 +133,7 @@ function CompraModal({ editing, onClose, onSaved }) {
     if (tipo === "bebida" && !bebidaId) { toast("Selecione um produto.", "error"); return; }
     if (tipo === "lanche" && !lancheId) { toast("Selecione um lanche.", "error"); return; }
     if (tipo === "tabacaria" && !tabacariaId) { toast("Selecione um produto.", "error"); return; }
+    if (tipo === "insumo" && !insumoId) { toast("Selecione um insumo.", "error"); return; }
     if (!quantidade || Number(quantidade) <= 0) { toast("Informe uma quantidade válida.", "error"); return; }
     if (custoUnitario === "" || Number(custoUnitario) < 0) { toast("Informe o custo unitário.", "error"); return; }
     setSaving(true);
@@ -135,6 +142,7 @@ function CompraModal({ editing, onClose, onSaved }) {
         bebida_id: tipo === "bebida" ? bebidaId : null,
         lanche_id: tipo === "lanche" ? lancheId : null,
         tabacaria_id: tipo === "tabacaria" ? tabacariaId : null,
+        insumo_id: tipo === "insumo" ? insumoId : null,
         quantidade: Number(quantidade), custo_unitario: Number(custoUnitario),
         fornecedor_id: fornecedorId || null, data, observacoes: observacoes || null,
       };
@@ -160,6 +168,7 @@ function CompraModal({ editing, onClose, onSaved }) {
           <button type="button" class=${tipo === "bebida" ? "active" : ""} onClick=${() => setTipo("bebida")}>Bebida</button>
           <button type="button" class=${tipo === "lanche" ? "active" : ""} onClick=${() => setTipo("lanche")}>Lanche</button>
           <button type="button" class=${tipo === "tabacaria" ? "active" : ""} onClick=${() => setTipo("tabacaria")}>Tabacaria</button>
+          <button type="button" class=${tipo === "insumo" ? "active" : ""} onClick=${() => setTipo("insumo")}>Insumo</button>
         </div>
         ${tipo === "bebida" ? html`
         <div class="field">
@@ -175,11 +184,18 @@ function CompraModal({ editing, onClose, onSaved }) {
             ${lanches.map((l) => html`<option key=${l.id} value=${l.id}>${l.nome}</option>`)}
           </select>
         </div>
-        ` : html`
+        ` : tipo === "tabacaria" ? html`
         <div class="field">
           <label>Produto (Tabacaria)</label>
           <select class="input" value=${tabacariaId} onChange=${(e) => setTabacariaId(e.target.value)} required>
             ${tabacaria.map((t) => html`<option key=${t.id} value=${t.id}>${t.nome}</option>`)}
+          </select>
+        </div>
+        ` : html`
+        <div class="field">
+          <label>Insumo</label>
+          <select class="input" value=${insumoId} onChange=${(e) => setInsumoId(e.target.value)} required>
+            ${insumos.map((i) => html`<option key=${i.id} value=${i.id}>${i.nome}</option>`)}
           </select>
         </div>
         `}

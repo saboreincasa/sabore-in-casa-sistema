@@ -1,8 +1,10 @@
-import { html, useState, useEffect } from "../lib.js";
+import { html, useState, useEffect, useMemo } from "../lib.js";
 import { supabase } from "../supabaseClient.js";
 import { useAppData, insertRow } from "../store.js";
 import { Modal, Badge, ImgThumb, EmptyState, LoadingState } from "../components/ui.js";
-import { dataHora } from "../format.js";
+import { dataHora, dataCurta, brl } from "../format.js";
+
+const NOME_TIPO = { bebida: "Bebida", lanche: "Lanche", tabacaria: "Tabacaria", insumo: "Insumo" };
 
 function statusDe(atual, minimo) {
   if (atual <= 0) return { tone: "red", label: "Crítico" };
@@ -42,11 +44,14 @@ function TabelaEstoque({ titulo, itens, idField, onAjustar }) {
 }
 
 export function EstoquePage() {
-  const { estoque, estoqueLanches, estoqueTabacaria, toast, refreshEstoque, refreshEstoqueLanches, refreshEstoqueTabacaria } = useAppData();
+  const { estoque, estoqueLanches, estoqueTabacaria, estoqueInsumos, analiseEstoque, toast,
+    refreshEstoque, refreshEstoqueLanches, refreshEstoqueTabacaria, refreshEstoqueInsumos, refreshAnaliseEstoque } = useAppData();
   const [modalOpen, setModalOpen] = useState(false);
   const [produtoAjuste, setProdutoAjuste] = useState(null);
   const [historico, setHistorico] = useState([]);
   const [loadingHist, setLoadingHist] = useState(true);
+  const [reposicoes, setReposicoes] = useState([]);
+  const [loadingRepos, setLoadingRepos] = useState(true);
 
   async function loadHistorico() {
     setLoadingHist(true);
@@ -64,15 +69,49 @@ export function EstoquePage() {
       setLoadingHist(false);
     }
   }
-  useEffect(() => { loadHistorico(); }, []);
+
+  async function loadReposicoes() {
+    setLoadingRepos(true);
+    try {
+      const { data, error } = await supabase
+        .from("movimentacoes_estoque")
+        .select("*, bebida:bebidas(nome), lanche:lanches(nome), tabacaria:tabacaria(nome), insumo:insumos_pizza(nome), fornecedor:fornecedores(nome)")
+        .eq("origem", "compra")
+        .order("criado_em", { ascending: false })
+        .limit(30);
+      if (error) throw error;
+      setReposicoes(data || []);
+    } catch (e) {
+      toast(`Erro ao carregar histórico de reposição: ${e.message}`, "error");
+    } finally {
+      setLoadingRepos(false);
+    }
+  }
+
+  useEffect(() => { loadHistorico(); loadReposicoes(); }, []);
 
   function handleSaved() {
     setModalOpen(false);
     refreshEstoque();
     refreshEstoqueLanches();
     refreshEstoqueTabacaria();
+    refreshEstoqueInsumos();
+    refreshAnaliseEstoque();
     loadHistorico();
+    loadReposicoes();
   }
+
+  const media = useMemo(() => {
+    const agora = Date.now();
+    return [...analiseEstoque]
+      .map((p) => {
+        const inicio = p.primeira_venda_em ? new Date(p.primeira_venda_em).getTime() : null;
+        const dias = inicio ? Math.max(1, (agora - inicio) / 86400000) : null;
+        const mediaDiaria = dias ? Number(p.total_vendido) / dias : 0;
+        return { ...p, mediaDiaria, diasParaAcabar: mediaDiaria > 0 ? Number(p.estoque_atual) / mediaDiaria : null };
+      })
+      .sort((a, b) => b.mediaDiaria - a.mediaDiaria);
+  }, [analiseEstoque]);
 
   return html`
     <div class="stack-6">
@@ -81,7 +120,61 @@ export function EstoquePage() {
       <${TabelaEstoque} titulo="Bebidas" itens=${estoque} idField="bebida_id" onAjustar=${(e) => { setProdutoAjuste({ ...e, tipoItem: "bebida" }); setModalOpen(true); }} />
       <${TabelaEstoque} titulo="Lanches" itens=${estoqueLanches} idField="lanche_id" onAjustar=${(e) => { setProdutoAjuste({ ...e, tipoItem: "lanche" }); setModalOpen(true); }} />
       <${TabelaEstoque} titulo="Tabacaria" itens=${estoqueTabacaria} idField="tabacaria_id" onAjustar=${(e) => { setProdutoAjuste({ ...e, tipoItem: "tabacaria" }); setModalOpen(true); }} />
+      <${TabelaEstoque} titulo="Insumos (pizza)" itens=${estoqueInsumos} idField="insumo_id" onAjustar=${(e) => { setProdutoAjuste({ ...e, tipoItem: "insumo" }); setModalOpen(true); }} />
       <p class="hint">Pizzas são produzidas sob demanda e não entram no controle de estoque. Vendas de combo no delivery baixam automaticamente as bebidas/lanches inclusos.</p>
+
+      <div class="card">
+        <h3 style="margin:0 0 4px;font-size:16px;">Histórico de reposição</h3>
+        <p class="muted-text small" style="margin:0 0 16px;">Cada compra registrada, com o estoque antes e depois da entrada — para reconstruir exatamente como chegamos ao saldo atual.</p>
+        ${loadingRepos ? html`<${LoadingState} />` : reposicoes.length === 0 ? html`<${EmptyState}>Nenhuma reposição registrada ainda.<//>` : html`
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>Data</th><th>Produto</th><th>Antes</th><th>Entrada</th><th>Depois</th><th>Fornecedor</th><th>Custo total</th><th>Obs.</th></tr></thead>
+              <tbody>
+                ${reposicoes.map((r) => html`
+                  <tr key=${r.id}>
+                    <td class="cell-sub">${dataHora(r.criado_em)}</td>
+                    <td class="cell-title">${r.bebida?.nome || r.lanche?.nome || r.tabacaria?.nome || r.insumo?.nome}</td>
+                    <td>${r.estoque_antes}</td>
+                    <td class="text-green bold">+${r.quantidade}</td>
+                    <td class="bold">${r.estoque_depois}</td>
+                    <td class="cell-sub">${r.fornecedor?.nome || "—"}</td>
+                    <td>${r.custo_unitario != null ? brl(r.custo_unitario * r.quantidade) : "—"}</td>
+                    <td class="cell-sub">${r.observacoes || "—"}</td>
+                  </tr>
+                `)}
+              </tbody>
+            </table>
+          </div>
+        `}
+      </div>
+
+      <div class="card">
+        <h3 style="margin:0 0 4px;font-size:16px;">Média de consumo por produto</h3>
+        <p class="muted-text small" style="margin:0 0 16px;">Calculada a partir do histórico real de vendas desde a primeira venda registrada de cada produto. Quanto menos dias de histórico, menos confiável a média.</p>
+        ${media.length === 0 ? html`<${EmptyState}>Sem dados suficientes ainda.<//>` : html`
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>Produto</th><th>Tipo</th><th>Comprado</th><th>Vendido</th><th>Estoque atual</th><th>Média/dia</th><th>Média/semana</th><th>Dias p/ acabar</th><th>Última reposição</th></tr></thead>
+              <tbody>
+                ${media.map((p) => html`
+                  <tr key=${`${p.tipo_produto}-${p.produto_id}`}>
+                    <td class="cell-title">${p.nome}</td>
+                    <td><span class="badge badge-neutral">${NOME_TIPO[p.tipo_produto]}</span></td>
+                    <td>${Number(p.total_comprado)}</td>
+                    <td>${Number(p.total_vendido)}</td>
+                    <td class="bold">${Number(p.estoque_atual)}</td>
+                    <td>${p.mediaDiaria.toFixed(2)}</td>
+                    <td>${(p.mediaDiaria * 7).toFixed(1)}</td>
+                    <td class=${p.diasParaAcabar !== null && p.diasParaAcabar < 7 ? "text-red bold" : ""}>${p.diasParaAcabar !== null ? Math.round(p.diasParaAcabar) : "—"}</td>
+                    <td class="cell-sub">${p.ultima_reposicao_em ? dataCurta(p.ultima_reposicao_em) : "—"}</td>
+                  </tr>
+                `)}
+              </tbody>
+            </table>
+          </div>
+        `}
+      </div>
 
       <div class="card">
         <h3 style="margin:0 0 16px;font-size:16px;">Últimos ajustes manuais</h3>
@@ -115,6 +208,7 @@ function AjusteModal({ produto, onClose, onSaved }) {
       const payload = { tipo, quantidade: Number(quantidade), motivo: motivo || null };
       if (produto.tipoItem === "lanche") payload.lanche_id = produto.lanche_id;
       else if (produto.tipoItem === "tabacaria") payload.tabacaria_id = produto.tabacaria_id;
+      else if (produto.tipoItem === "insumo") payload.insumo_id = produto.insumo_id;
       else payload.bebida_id = produto.bebida_id;
       await insertRow("ajustes_estoque", payload);
       toast("Ajuste registrado.", "success");
