@@ -217,3 +217,22 @@ table.data-table tr:hover td { background: rgba(90,53,29,0.03); }
 .status-dot { width: 7px; height: 7px; border-radius: 999px; background: var(--green); display: inline-block; margin-right: 5px; }
 .scroll-x { overflow-x: auto; }
 .link-btn { background: none; border: none; color: var(--olive); font-weight: 600; cursor: pointer; padding: 0; font-size: 12.5px; }
+
+/* Ficha técnica dos sabores (Manual de Produção) */
+.sabor-selo { align-self: flex-start; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--olive); background: rgba(79,111,50,0.12); border-radius: 999px; padding: 2px 9px; }
+.sabor-desc { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ficha-edit .input { min-width: 0; padding: 6px 8px; }
+.ficha-edit td:first-child .input { min-width: 140px; }
+.ficha-edit td:nth-child(n+3):nth-child(-n+5) .input { width: 64px; }
+.ficha-padrao { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; background: var(--bg2); border-radius: var(--radius); padding: 12px; font-size: 14px; }
+.ficha-ordem { display: flex; flex-wrap: wrap; gap: 6px; }
+.ficha-passo { border: 1px solid rgba(90,53,29,0.2); border-radius: 999px; padding: 4px 10px; font-size: 13px; }
+.ficha-passo b { color: #c96a1b; margin-right: 2px; }
+.ficha-passo-forno { background: #b3261e; color: #fff; border-color: #b3261e; }
+.ficha-passo-forno b { color: #fff; }
+.ficha-box { border-radius: var(--radius); padding: 10px 12px; border-left: 4px solid; background: var(--card); box-shadow: var(--shadow); }
+.ficha-box p { margin: 4px 0 0; font-size: 14px; }
+.ficha-cuidado { border-color: #b3261e; }
+.ficha-cuidado strong { color: #b3261e; }
+.ficha-segredo { border-color: #2f7d32; }
+.ficha-segredo strong { color: #2f7d32; }
